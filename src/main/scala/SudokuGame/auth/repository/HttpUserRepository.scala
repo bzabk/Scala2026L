@@ -1,66 +1,43 @@
 package SudokuGame.auth.repository
 
-import SudokuGame.auth.domain.User
-import SudokuGame.common.AwsClient
-import software.amazon.awssdk.services.dynamodb.model.{AttributeValue, GetItemRequest, PutItemRequest}
+import com.typesafe.config.ConfigFactory
 
 import java.net.URI
 import java.net.http.{HttpClient, HttpRequest, HttpResponse}
-import scala.collection.JavaConverters.mapAsJavaMapConverter
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 import scala.jdk.FutureConverters.*
-import com.typesafe.config.ConfigFactory
 
 class HttpUserRepository extends UserRepository {
 
   private val client = HttpClient.newHttpClient()
 
-  private val config = ConfigFactory.load()
-  private val baseUrl = config.getString("aws.api.base-url")
-  private val loginEndpoint = config.getString("aws.api.login-endpoint")
+  private val config           = ConfigFactory.load()
+  private val loginEndpoint    = config.getString("aws.api.login-endpoint")
   private val registerEndpoint = config.getString("aws.api.register-endpoint")
 
-
-  override def register(email: String,passwordHash: String): Future[Boolean] = {
-    val requestBody = s"""{"username": "${email}", "password": "${passwordHash}"}"""
+  override def register(email: String, username: String, passwordHash: String): Future[Boolean] = {
+    val body = s"""{"email": "$email", "username": "$username", "password": "$passwordHash"}"""
     val request = HttpRequest.newBuilder()
-      .uri(URI.create(s"$registerEndpoint"))
+      .uri(URI.create(registerEndpoint))
       .header("Content-Type", "application/json")
-      .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+      .POST(HttpRequest.BodyPublishers.ofString(body))
       .build()
 
     client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-      .thenApply(response => {
-        if (response.statusCode() == 200) {
-
-          true
-        } else {
-          println(response.body())
-          false
-        }
-      })
+      .thenApply(_.statusCode() == 200)
       .asScala
   }
 
-  override def login(email: String, password: String): Future[Boolean] = {
-    val requestBody = s"""{"email": "$email", "password": "$password"}"""
+  override def login(username: String, password: String): Future[Boolean] = {
+    val body = s"""{"username": "$username", "password": "$password"}"""
     val request = HttpRequest.newBuilder()
-      .uri(URI.create(s"$loginEndpoint"))
+      .uri(URI.create(loginEndpoint))
       .header("Content-Type", "application/json")
-      .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+      .POST(HttpRequest.BodyPublishers.ofString(body))
       .build()
 
     client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-      .thenApply(response => {
-        if (response.statusCode() == 200) {
-          true
-        } else {
-          false
-        }
-      })
+      .thenApply(_.statusCode() == 200)
       .asScala
   }
-
-
-
 }
