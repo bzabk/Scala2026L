@@ -1,6 +1,6 @@
 package SudokuGame.controller
 
-import SudokuGame.auth.domain.{LoginFailure, LoginSuccess, RegisterFailure, RegisterSuccess}
+import SudokuGame.auth.domain.{EmailPolicy, LoginFailure, LoginSuccess, PasswordPolicy, RegisterFailure, RegisterSuccess, UserNamePolicy}
 import SudokuGame.auth.service.AuthService
 import SudokuGame.auth.ui.{LoginView, RegisterView}
 import SudokuGame.ui.layout.MainApplicationLayout
@@ -45,10 +45,19 @@ class AuthController(
   }
 
   private def performLogin(email: String, password: String): Unit = {
+    val validationError =
+      EmailPolicy.validate(email) orElse
+      PasswordPolicy.validate(password)
+
+    validationError match {
+      case Some(error) =>
+        if (loginView != null) loginView.showError(error)
+        return
+      case None =>
+    }
+
     authService.login(email, password).onComplete {
       case Success(LoginSuccess) =>
-        println(email)
-        println(password)
         Platform.runLater(closeWithDelay("Zalogowano pomyślnie!"))
       case Success(LoginFailure(reason)) =>
         Platform.runLater {
@@ -62,6 +71,18 @@ class AuthController(
   }
 
   private def performRegister(email: String, username: String, password: String): Unit = {
+    val validationError =
+      EmailPolicy.validate(email) orElse
+      UserNamePolicy.validate(username) orElse
+      PasswordPolicy.validate(password)
+
+    validationError match {
+      case Some(error) =>
+        if (registerView != null) registerView.showError(error)
+        return
+      case None =>
+    }
+
     authService.register(email, username, password).onComplete {
       case Success(RegisterSuccess) =>
         Platform.runLater(closeWithDelay("Zarejestrowano pomyślnie! Możesz teraz się zalogować"))

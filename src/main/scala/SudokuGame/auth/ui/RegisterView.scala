@@ -51,7 +51,7 @@ class RegisterView(
     alignment = Pos.CenterLeft
     padding = Insets(0, 0, 15, 0)
     children = Seq(
-      new Label("Rejestracja w AWS Cognito") {
+      new Label("Rejestracja") {
         style = "-fx-text-fill: white; -fx-font-size: 17px; -fx-font-weight: bold;"
       },
       new Region { hgrow = Priority.Always },
