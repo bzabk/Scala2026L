@@ -51,7 +51,7 @@ class LoginView(
     alignment = Pos.CenterLeft
     padding = Insets(0, 0, 15, 0)
     children = Seq(
-      new Label("Logowanie") {
+      new Label("Login") {
         style = "-fx-text-fill: white; -fx-font-size: 17px; -fx-font-weight: bold;"
       },
       new Region { hgrow = Priority.Always },
@@ -70,7 +70,7 @@ class LoginView(
   }
 
   private val usernameField = new TextField {
-    promptText = "Wprowadź login"
+    promptText = "Enter username"
     style = inputStyle
   }
 
@@ -85,7 +85,7 @@ class LoginView(
     managed <== visible
   }
 
-  private val loginBtn = new Button("Zaloguj się") {
+  private val loginBtn = new Button("Sign In") {
     maxWidth = Double.MaxValue
     padding = Insets(12, 0, 12, 0)
     style = primaryBtnStyle
@@ -101,8 +101,8 @@ class LoginView(
     spacing = 18
     padding = Insets(20, 0, 20, 0)
     children = Seq(
-      new VBox(6, new Label("Nazwa użytkownika") { style = labelStyle }, usernameField),
-      new VBox(6, new Label("Hasło")             { style = labelStyle }, passwordField),
+      new VBox(6, new Label("Username") { style = labelStyle }, usernameField),
+      new VBox(6, new Label("Password") { style = labelStyle }, passwordField),
       messageLabel,
       loginBtn
     )
@@ -117,7 +117,7 @@ class LoginView(
     messageLabel.visible = true
   }
 
-  private val registerBtn = new Button("Nie masz konta? Zarejestruj się") {
+  private val registerBtn = new Button("Don't have an account? Sign Up") {
     padding = Insets(8, 20, 8, 20)
     style = secondaryBtnStyle
     onAction       = _ => onSwitchToRegister()

@@ -44,28 +44,18 @@ class AuthController(
     pause.play()
   }
 
-  private def performLogin(email: String, password: String): Unit = {
-    val validationError =
-      EmailPolicy.validate(email) orElse
-      PasswordPolicy.validate(password)
+  private def performLogin(username: String, password: String): Unit = {
 
-    validationError match {
-      case Some(error) =>
-        if (loginView != null) loginView.showError(error)
-        return
-      case None =>
-    }
-
-    authService.login(email, password).onComplete {
+    authService.login(username, password).onComplete {
       case Success(LoginSuccess) =>
-        Platform.runLater(closeWithDelay("Zalogowano pomyślnie!"))
+        Platform.runLater(closeWithDelay("Logged in successfully!"))
       case Success(LoginFailure(reason)) =>
         Platform.runLater {
           if (loginView != null) loginView.showError(reason)
         }
       case Failure(_) =>
         Platform.runLater {
-          if (loginView != null) loginView.showError("Niespodziewany błąd. Spróbuj ponownie później")
+          if (loginView != null) loginView.showError("Unexpected error. Please try again later")
         }
     }
   }
@@ -85,14 +75,14 @@ class AuthController(
 
     authService.register(email, username, password).onComplete {
       case Success(RegisterSuccess) =>
-        Platform.runLater(closeWithDelay("Zarejestrowano pomyślnie! Możesz teraz się zalogować"))
+        Platform.runLater(closeWithDelay("Account created! You can now sign in."))
       case Success(RegisterFailure(reason)) =>
         Platform.runLater {
           if (registerView != null) registerView.showError(reason)
         }
       case Failure(_) =>
         Platform.runLater {
-          if (registerView != null) registerView.showError("Niespodziewany błąd. Spróbuj ponownie później")
+          if (registerView != null) registerView.showError("Unexpected error. Please try again later")
         }
     }
   }

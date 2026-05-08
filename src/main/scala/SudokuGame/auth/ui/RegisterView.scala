@@ -51,7 +51,7 @@ class RegisterView(
     alignment = Pos.CenterLeft
     padding = Insets(0, 0, 15, 0)
     children = Seq(
-      new Label("Rejestracja") {
+      new Label("Sign Up") {
         style = "-fx-text-fill: white; -fx-font-size: 17px; -fx-font-weight: bold;"
       },
       new Region { hgrow = Priority.Always },
@@ -74,7 +74,7 @@ class RegisterView(
   }
 
   private val usernameField = new TextField {
-    promptText = "Wprowadź login"
+    promptText = "Enter username"
     style = inputStyle
   }
 
@@ -89,7 +89,7 @@ class RegisterView(
     managed <== visible
   }
 
-  private val registerBtn = new Button("Zarejestruj się") {
+  private val registerBtn = new Button("Create Account") {
     maxWidth = Double.MaxValue
     padding = Insets(12, 0, 12, 0)
     style = primaryBtnStyle
@@ -105,15 +105,15 @@ class RegisterView(
     spacing = 18
     padding = Insets(20, 0, 20, 0)
     children = Seq(
-      new VBox(6, new Label("Adres E-mail")        { style = labelStyle }, emailField),
-      new VBox(6, new Label("Nazwa użytkownika")   { style = labelStyle }, usernameField),
-      new VBox(6, new Label("Hasło")               { style = labelStyle }, passwordField),
+      new VBox(6, new Label("Email Address")        { style = labelStyle }, emailField),
+      new VBox(6, new Label("Username")            { style = labelStyle }, usernameField),
+      new VBox(6, new Label("Password")            { style = labelStyle }, passwordField),
       errorLabel,
       registerBtn
     )
   }
 
-  private val switchBtn = new Button("Masz już konto? Zaloguj się") {
+  private val switchBtn = new Button("Already have an account? Sign In") {
     padding = Insets(8, 20, 8, 20)
     style = secondaryBtnStyle
     onAction       = _ => onSwitchToLogin()

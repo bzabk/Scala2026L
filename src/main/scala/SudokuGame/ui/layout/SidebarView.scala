@@ -53,7 +53,7 @@ class SidebarView(authController: AuthController) {
       style = activeNavLinkStyle
     }
 
-    private val buttonNewGame = new Button("🎮  Nowa Gra") {
+    private val buttonNewGame = new Button("🎮  New Game") {
       maxWidth = Double.MaxValue
       alignment = Pos.CenterLeft
       padding = Insets(10, 15, 10, 15)
@@ -67,7 +67,7 @@ class SidebarView(authController: AuthController) {
     spacing = 10
     padding = Insets(20, 15, 20, 15)
     style = s"-fx-border-color: $borderColor; -fx-border-width:  $borderLineThickness 0 0 0;"
-    private val loginButton = new Button("Zaloguj się") {
+    private val loginButton = new Button("Sign In") {
       maxWidth = Double.MaxValue
       alignment = Pos.Center
       padding = Insets(10, 15, 10, 15)
