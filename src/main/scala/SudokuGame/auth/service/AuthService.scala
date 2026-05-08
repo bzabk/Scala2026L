@@ -14,17 +14,17 @@ class AuthService(userRepository: HttpUserRepository)(implicit ec: ExecutionCont
     userRepository.register(email, username, password)
       .map {
         case true  => RegisterSuccess
-        case false => RegisterFailure("Rejestracja nieudana: użytkownik już istnieje")
+        case false => RegisterFailure("Registration failed: user already exists")
       }
-      .recover { case _ => RegisterFailure("Błąd połączenia z serwerem") }
+      .recover { case _ => RegisterFailure("Connection error. Please try again later") }
   }
 
   def login(email: String, password: String): Future[LoginResult] = {
     userRepository.login(email, password)
       .map {
         case true  => LoginSuccess
-        case false => LoginFailure("Nieprawidłowy email lub hasło")
+        case false => LoginFailure("Invalid email or password")
       }
-      .recover { case _ => LoginFailure("Błąd połączenia z serwerem") }
+      .recover { case _ => LoginFailure("Connection error. Please try again later") }
   }
 }

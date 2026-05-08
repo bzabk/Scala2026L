@@ -13,22 +13,22 @@ class DashboardView {
     spacing = 8
     padding = Insets(40, 40, 24, 40)
     children = Seq(
-      new Label("Witaj w ScalaFX Sudoku! 👋") {
+      new Label("Welcome to ScalaFX Sudoku! 👋") {
         style = "-fx-text-fill: white; -fx-font-size: 26px; -fx-font-weight: bold;"
       },
-      new Label("Zaloguj się, aby zyskać dostęp do statystyk i zapisu w chmurze.") {
+      new Label("Sign in to access your stats and cloud save.") {
         style = "-fx-text-fill: #9ca3af; -fx-font-size: 14px;"
       }
     )
   }
 
-  private val loginBtn = new Button("Zaloguj się / Rejestracja") {
+  private val loginBtn = new Button("Sign In / Register") {
     style =
       "-fx-background-color: #2563eb; -fx-text-fill: white; -fx-font-size: 14px; " +
       "-fx-font-weight: bold; -fx-background-radius: 10; -fx-cursor: hand; -fx-padding: 12 20 12 20;"
   }
 
-  private val guestBtn = new Button("Graj jako gość") {
+  private val guestBtn = new Button("Play as Guest") {
     style =
       "-fx-background-color: #374151; -fx-text-fill: white; -fx-font-size: 14px; " +
       "-fx-font-weight: bold; -fx-background-radius: 10; -fx-cursor: hand; -fx-padding: 12 20 12 20;"
@@ -44,12 +44,12 @@ class DashboardView {
       new Label("🧠") {
         style = "-fx-font-size: 42px;"
       },
-      new Label("Zapisuj postępy w chmurze") {
+      new Label("Save your progress to the cloud") {
         style = "-fx-text-fill: white; -fx-font-size: 20px; -fx-font-weight: bold;"
       },
       new Label(
-        "Zaloguj się lub załóż konto, aby korzystać z synchronizacji AWS DynamoDB.\n" +
-        "Śledź statystyki i zapisuj stan gry (Cloud Save) na dowolnym urządzeniu!"
+        "Sign in or create an account to sync with AWS DynamoDB.\n" +
+        "Track your stats and save your game state (Cloud Save) on any device!"
       ) {
         style = "-fx-text-fill: #9ca3af; -fx-font-size: 13px;"
         wrapText = true
@@ -90,14 +90,14 @@ class DashboardView {
     style = cardStyle
     maxHeight = Double.MaxValue
     children = Seq(
-      new Label("Nowa Gra") {
+      new Label("New Game") {
         style = "-fx-text-fill: white; -fx-font-size: 15px; -fx-font-weight: bold;"
         padding = Insets(0, 0, 4, 0)
       },
-      levelRow("Łatwy",  "#4ade80", "rgba(22, 163, 74, 0.2)"),
-      levelRow("Średni", "#fbbf24", "rgba(202, 138, 4, 0.2)"),
-      levelRow("Trudny", "#f87171", "rgba(220, 38, 38, 0.2)"),
-      levelRow("Ekspert","#c084fc", "rgba(147, 51, 234, 0.2)")
+      levelRow("Easy",   "#4ade80", "rgba(22, 163, 74, 0.2)"),
+      levelRow("Medium", "#fbbf24", "rgba(202, 138, 4, 0.2)"),
+      levelRow("Hard",   "#f87171", "rgba(220, 38, 38, 0.2)"),
+      levelRow("Expert", "#c084fc", "rgba(147, 51, 234, 0.2)")
     )
   }
 
