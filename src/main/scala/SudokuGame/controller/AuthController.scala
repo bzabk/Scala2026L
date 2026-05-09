@@ -3,6 +3,7 @@ package SudokuGame.controller
 import SudokuGame.auth.domain.{EmailPolicy, LoginFailure, LoginSuccess, PasswordPolicy, RegisterFailure, RegisterSuccess, UserNamePolicy}
 import SudokuGame.auth.service.AuthService
 import SudokuGame.auth.ui.{LoginView, RegisterView}
+import SudokuGame.common.AppState
 import SudokuGame.ui.layout.MainApplicationLayout
 import scalafx.animation.PauseTransition
 import scalafx.application.Platform
@@ -12,8 +13,10 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Failure, Success}
 
 class AuthController(
-  mainLayout:  MainApplicationLayout,
-  authService: AuthService
+  mainLayout:     MainApplicationLayout,
+  authService:    AuthService,
+  appState:       AppState,
+  onLoginSuccess: String => Unit = _ => ()
 ) {
 
   private var loginView:    LoginView    = _
@@ -37,6 +40,16 @@ class AuthController(
     mainLayout.showOverlay(registerView.view)
   }
 
+  def signOut(): Unit = {
+    mainLayout.showLoading()
+    val pause = new PauseTransition(Duration(800))
+    pause.onFinished = _ => {
+      appState.currentUser.set(None)
+      mainLayout.hideLoading()
+    }
+    pause.play()
+  }
+
   private def closeWithDelay(message: String): Unit = {
     val pause = new PauseTransition(Duration(700))
     loginView.showSuccess(message)
@@ -45,16 +58,23 @@ class AuthController(
   }
 
   private def performLogin(username: String, password: String): Unit = {
-
+    mainLayout.showLoading()
     authService.login(username, password).onComplete {
-      case Success(LoginSuccess) =>
-        Platform.runLater(closeWithDelay("Logged in successfully!"))
+      case Success(LoginSuccess(user)) =>
+        Platform.runLater {
+          mainLayout.hideLoading()
+          appState.currentUser.set(Some(user))
+          onLoginSuccess(user.username)
+          mainLayout.hideOverlay()
+        }
       case Success(LoginFailure(reason)) =>
         Platform.runLater {
+          mainLayout.hideLoading()
           if (loginView != null) loginView.showError(reason)
         }
       case Failure(_) =>
         Platform.runLater {
+          mainLayout.hideLoading()
           if (loginView != null) loginView.showError("Unexpected error. Please try again later")
         }
     }
@@ -70,18 +90,24 @@ class AuthController(
       case Some(error) =>
         if (registerView != null) registerView.showError(error)
         return
-      case None =>
+      case None => {}
     }
 
+    mainLayout.showLoading()
     authService.register(email, username, password).onComplete {
       case Success(RegisterSuccess) =>
-        Platform.runLater(closeWithDelay("Account created! You can now sign in."))
+        Platform.runLater {
+          mainLayout.hideLoading()
+          closeWithDelay("Account created! You can now sign in.")
+        }
       case Success(RegisterFailure(reason)) =>
         Platform.runLater {
+          mainLayout.hideLoading()
           if (registerView != null) registerView.showError(reason)
         }
       case Failure(_) =>
         Platform.runLater {
+          mainLayout.hideLoading()
           if (registerView != null) registerView.showError("Unexpected error. Please try again later")
         }
     }

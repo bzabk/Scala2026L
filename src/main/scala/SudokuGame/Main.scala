@@ -2,7 +2,10 @@ package SudokuGame
 
 import SudokuGame.auth.repository.HttpUserRepository
 import SudokuGame.auth.service.AuthService
-import SudokuGame.controller.AuthController
+import SudokuGame.common.AppState
+import SudokuGame.controller.{AuthController, GameController}
+import SudokuGame.game.repository.GameRepository
+import SudokuGame.game.service.GameService
 import SudokuGame.ui.layout.{MainApplicationLayout, SidebarView}
 import SudokuGame.ui.views.DashboardView
 import scalafx.application.JFXApp3
@@ -13,12 +16,16 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 object Main extends JFXApp3 {
   override def start(): Unit = {
-
-    val appLayout   = new MainApplicationLayout()
-    val authService = new AuthService(new HttpUserRepository())
-    val authController = new AuthController(appLayout, authService)
-    val sidebar = new SidebarView(authController)
-    val dashboard = new DashboardView(authController)
+    val appState       = new AppState()
+    val appLayout      = new MainApplicationLayout()
+    val authService    = new AuthService(new HttpUserRepository())
+    val gameService    = new GameService(new GameRepository())
+    val gameController = new GameController(appLayout, gameService, appState)
+    val authController = new AuthController(appLayout, authService, appState,
+      onLoginSuccess = gameController.loadRecentGames
+    )
+    val sidebar = new SidebarView(authController,appState,appLayout)
+    val dashboard = new DashboardView(authController,appState)
     appLayout.setSidebar(sidebar.view)
     appLayout.setMainContent(dashboard.view)
 

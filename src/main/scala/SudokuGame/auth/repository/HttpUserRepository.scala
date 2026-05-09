@@ -1,19 +1,17 @@
 package SudokuGame.auth.repository
 
-import com.typesafe.config.ConfigFactory
+import SudokuGame.common.{AppConfig, HttpClientProvider}
 
 import java.net.URI
-import java.net.http.{HttpClient, HttpRequest, HttpResponse}
+import java.net.http.{HttpRequest, HttpResponse}
 import scala.concurrent.Future
 import scala.jdk.FutureConverters.*
 
 class HttpUserRepository extends UserRepository {
 
-  private val client = HttpClient.newHttpClient()
-
-  private val config           = ConfigFactory.load()
-  private val loginEndpoint    = config.getString("aws.api.login-endpoint")
-  private val registerEndpoint = config.getString("aws.api.register-endpoint")
+  private val client           = HttpClientProvider.client
+  private val loginEndpoint    = AppConfig.loginEndpoint
+  private val registerEndpoint = AppConfig.registerEndpoint
 
   override def register(email: String, username: String, passwordHash: String): Future[Boolean] = {
     val body = s"""{"email": "$email", "username": "$username", "password": "$passwordHash"}"""
