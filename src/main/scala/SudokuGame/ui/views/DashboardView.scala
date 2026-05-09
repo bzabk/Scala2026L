@@ -1,10 +1,12 @@
 package SudokuGame.ui.views
 
+import SudokuGame.controller.AuthController
+import javafx.event.ActionEvent
 import scalafx.geometry.{Insets, Pos}
 import scalafx.scene.control.{Button, Label, ScrollPane}
 import scalafx.scene.layout.{HBox, Priority, Region, VBox}
 
-class DashboardView {
+class DashboardView(authController: AuthController) {
 
   private val cardStyle =
     "-fx-background-color: #111827; -fx-border-color: #1e293b; -fx-border-width: 1; -fx-border-radius: 16; -fx-background-radius: 16;"
@@ -26,6 +28,7 @@ class DashboardView {
     style =
       "-fx-background-color: #2563eb; -fx-text-fill: white; -fx-font-size: 14px; " +
       "-fx-font-weight: bold; -fx-background-radius: 10; -fx-cursor: hand; -fx-padding: 12 20 12 20;"
+    onAction = (_: ActionEvent) => authController.showLoginView()
   }
 
   private val guestBtn = new Button("Play as Guest") {
@@ -39,7 +42,6 @@ class DashboardView {
     spacing = 20
     style = cardStyle
     alignment = Pos.Center
-    maxHeight = Double.MaxValue
     children = Seq(
       new Label("🧠") {
         style = "-fx-font-size: 42px;"
@@ -88,7 +90,6 @@ class DashboardView {
     padding = Insets(24)
     spacing = 12
     style = cardStyle
-    maxHeight = Double.MaxValue
     children = Seq(
       new Label("New Game") {
         style = "-fx-text-fill: white; -fx-font-size: 15px; -fx-font-weight: bold;"
@@ -104,7 +105,6 @@ class DashboardView {
   private val cardsRow = new HBox {
     spacing = 20
     padding = Insets(0, 32, 32, 32)
-    vgrow = Priority.Always
     children = Seq(cloudCard, newGameCard)
   }
   
@@ -117,7 +117,6 @@ class DashboardView {
     minWidth = 700
     children = Seq(header, cardsRow)
   }
-  VBox.setVgrow(cardsRow, Priority.Always)
 
   val view: ScrollPane = new ScrollPane {
     content = innerContent

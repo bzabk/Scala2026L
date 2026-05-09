@@ -18,7 +18,7 @@ object Main extends JFXApp3 {
     val authService = new AuthService(new HttpUserRepository())
     val authController = new AuthController(appLayout, authService)
     val sidebar = new SidebarView(authController)
-    val dashboard = new DashboardView()
+    val dashboard = new DashboardView(authController)
     appLayout.setSidebar(sidebar.view)
     appLayout.setMainContent(dashboard.view)
 
