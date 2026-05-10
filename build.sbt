@@ -10,5 +10,6 @@ libraryDependencies ++= Seq(
   "org.mindrot" % "jbcrypt" % "0.4",
   "org.slf4j" % "slf4j-simple" % "2.0.13",
   "com.typesafe" % "config" % "1.4.2",
-  "org.scalameta" %% "munit" % "1.0.0" % Test
+  "org.scalameta" %% "munit" % "1.0.0" % Test,
+  "com.lihaoyi" %% "ujson" % "3.1.3"
 )

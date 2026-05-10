@@ -1,10 +1,7 @@
 package SudokuGame.auth.service
 
-import SudokuGame.auth.domain.{LoginFailure, LoginResult, LoginSuccess, RegisterFailure, RegisterResult, RegisterSuccess}
-import SudokuGame.auth.repository.{HttpUserRepository, UserRepository}
-import org.mindrot.jbcrypt.BCrypt
-
-import java.security.MessageDigest
+import SudokuGame.auth.domain.{LoggedUser, LoginFailure, LoginResult, LoginSuccess, RegisterFailure, RegisterResult, RegisterSuccess}
+import SudokuGame.auth.repository.HttpUserRepository
 import scala.concurrent.{ExecutionContext, Future}
 
 class AuthService(userRepository: HttpUserRepository)(implicit ec: ExecutionContext) {
@@ -19,10 +16,10 @@ class AuthService(userRepository: HttpUserRepository)(implicit ec: ExecutionCont
       .recover { case _ => RegisterFailure("Connection error. Please try again later") }
   }
 
-  def login(email: String, password: String): Future[LoginResult] = {
-    userRepository.login(email, password)
+  def login(username: String, password: String): Future[LoginResult] = {
+    userRepository.login(username, password)
       .map {
-        case true  => LoginSuccess
+        case true  => LoginSuccess(LoggedUser(username))
         case false => LoginFailure("Invalid email or password")
       }
       .recover { case _ => LoginFailure("Connection error. Please try again later") }
