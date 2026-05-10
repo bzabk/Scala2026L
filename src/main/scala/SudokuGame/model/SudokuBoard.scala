@@ -89,6 +89,38 @@ class SudokuBoard(initialBoard: Array[Array[Int]] = Array.ofDim[Int](9, 9)) {
   }
 
   def _updateConflictsForValue(row: Int, col: Int, value: Int): Unit = {
-    // TODO(majewska-mi)
+    val cols = (0 until 9).filter(c => board(row)(c).value == value)
+
+    cols match {
+      case Seq()  => ()
+      case Seq(c) =>
+        conflicts(row)(c) = false
+      case many =>
+        many.foreach(c => conflicts(row)(c) = true)
+    }
+
+    val rows = (0 until 9).filter(r => board(r)(col).value == value)
+
+    rows match {
+      case Seq()  => ()
+      case Seq(r) =>
+        conflicts(r)(col) = false
+      case many =>
+        many.foreach(r => conflicts(r)(col) = true)
+    }
+
+    val boxRowCols = for {
+      r <- (row / 3) * 3 until (row / 3) * 3 + 3
+      c <- (col / 3) * 3 until (col / 3) * 3 + 3
+      if board(r)(c).value == value
+    } yield (r, c)
+
+    boxRowCols match {
+      case Seq()       => ()
+      case Seq((r, c)) =>
+        conflicts(r)(c) = false
+      case many =>
+        many.foreach((r, c) => conflicts(r)(c) = true)
+    }
   }
 }
