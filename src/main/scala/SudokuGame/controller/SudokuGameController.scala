@@ -71,7 +71,7 @@ class SudokuGameController {
   def undo(): Unit = {
     if (gameState == null || gameState.isGameOver) return
 
-    val (updatedState, moveOpt) = gameState.popUndoMove
+    val (updatedState, moveOpt) = gameState.popUndoMove()
     moveOpt match {
       case Some(move) =>
         gameState.board.move(move.row, move.col, move.previousValue)
@@ -85,7 +85,7 @@ class SudokuGameController {
   def redo(): Unit = {
     if (gameState == null || gameState.isGameOver) return
 
-    val (updatedState, moveOpt) = gameState.popRedoMove
+    val (updatedState, moveOpt) = gameState.popRedoMove()
     moveOpt match {
       case Some(move) =>
         gameState.board.move(move.row, move.col, move.newValue)
@@ -106,7 +106,7 @@ class SudokuGameController {
   def updateTime(): Unit = {
     if (gameState == null || gameState.isGameOver) return
 
-    gameState = gameState.incrementTime
+    gameState = gameState.incrementTime()
     gameStateProperty.value = gameState
   }
 }

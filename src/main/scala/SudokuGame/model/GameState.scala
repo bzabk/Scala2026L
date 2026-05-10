@@ -18,11 +18,11 @@ case class GameState(
     this.copy(selectedRow = Some(row), selectedCol = Some(col))
   }
 
-  def clearSelection: GameState = {
+  def clearSelection(): GameState = {
     this.copy(selectedRow = None, selectedCol = None)
   }
 
-  def incrementTime: GameState = {
+  def incrementTime(): GameState = {
     this.copy(elapsedSeconds = elapsedSeconds + 1)
   }
 
@@ -30,7 +30,7 @@ case class GameState(
     this.copy(moveHistory = move :: moveHistory, redoHistory = Nil)
   }
 
-  def popUndoMove: (GameState, Option[BoardMove]) = {
+  def popUndoMove(): (GameState, Option[BoardMove]) = {
     moveHistory match {
       case move :: remaining =>
         (
@@ -44,7 +44,7 @@ case class GameState(
     }
   }
 
-  def popRedoMove: (GameState, Option[BoardMove]) = {
+  def popRedoMove(): (GameState, Option[BoardMove]) = {
     redoHistory match {
       case move :: remaining =>
         (
@@ -58,15 +58,15 @@ case class GameState(
     }
   }
 
-  def canUndo: Boolean = moveHistory.nonEmpty
-
-  def canRedo: Boolean = redoHistory.nonEmpty
-
-  def formatTime: String = {
+  def formatTime(): String = {
     val minutes = elapsedSeconds / 60
     val seconds = elapsedSeconds % 60
     f"$minutes%02d:$seconds%02d"
   }
+
+  def canUndo: Boolean = moveHistory.nonEmpty
+
+  def canRedo: Boolean = redoHistory.nonEmpty
 
   def conflicts: Array[Array[Boolean]] = board.conflicts
 
