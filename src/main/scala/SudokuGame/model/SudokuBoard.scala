@@ -27,13 +27,11 @@ class SudokuBoard(initialBoard: Array[Array[Int]] = Array.ofDim[Int](9, 9)) {
   def getAllCells(): Array[Array[SudokuCell]] = _board
 
   def move(row: Int, col: Int, value: Int): Unit = {
-    val hadConflicts = conflicts(row)(col)
     val previousValue = _board(row)(col).value
 
     _board(row)(col) = _board(row)(col).copy(value = value)
 
-    if (hadConflicts) _updateConflictsForValue(row, col, previousValue)
-
+    _updateConflictsForValue(row, col, previousValue)
     _updateConflictsForValue(row, col, value)
   }
 
@@ -76,26 +74,30 @@ class SudokuBoard(initialBoard: Array[Array[Int]] = Array.ofDim[Int](9, 9)) {
     ).contains(value)
   }
 
+  private def _hasConflictAt(row: Int, col: Int): Boolean = {
+    val value = _board(row)(col).value
+    if (value == 0) false
+    else {
+      val rowMatches = (0 until 9).count(c => _board(row)(c).value == value)
+      val colMatches = (0 until 9).count(r => _board(r)(col).value == value)
+      val boxMatches =
+        (for {
+          r <- (row / 3) * 3 until (row / 3) * 3 + 3
+          c <- (col / 3) * 3 until (col / 3) * 3 + 3
+        } yield _board(r)(c).value).count(_ == value)
+
+      rowMatches > 1 || colMatches > 1 || boxMatches > 1
+    }
+  }
+
   private def _updateConflictsForValue(row: Int, col: Int, value: Int): Unit = {
-    val cols = (0 until 9).filter(c => _board(row)(c).value == value)
+    val cols = (0 until 9)
+      .filter(c => _board(row)(c).value == value)
+      .map((c) => (row, c))
 
-    cols match {
-      case Seq()  => ()
-      case Seq(c) =>
-        conflicts(row)(c) = false
-      case many =>
-        many.foreach(c => conflicts(row)(c) = true)
-    }
-
-    val rows = (0 until 9).filter(r => _board(r)(col).value == value)
-
-    rows match {
-      case Seq()  => ()
-      case Seq(r) =>
-        conflicts(r)(col) = false
-      case many =>
-        many.foreach(r => conflicts(r)(col) = true)
-    }
+    val rows = (0 until 9)
+      .filter(r => _board(r)(col).value == value)
+      .map((r) => (r, col))
 
     val boxRowCols = for {
       r <- (row / 3) * 3 until (row / 3) * 3 + 3
@@ -103,13 +105,9 @@ class SudokuBoard(initialBoard: Array[Array[Int]] = Array.ofDim[Int](9, 9)) {
       if _board(r)(c).value == value
     } yield (r, c)
 
-    boxRowCols match {
-      case Seq()       => ()
-      case Seq((r, c)) =>
-        conflicts(r)(c) = false
-      case many =>
-        many.foreach((r, c) => conflicts(r)(c) = true)
-    }
+    val distinctRowCols = (cols ++ rows ++ boxRowCols).distinct
+
+    distinctRowCols.foreach((r, c) => conflicts(r)(c) = _hasConflictAt(r, c))
   }
 
   def isValid: Boolean = {
