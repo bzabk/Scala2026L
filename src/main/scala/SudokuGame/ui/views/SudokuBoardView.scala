@@ -10,7 +10,8 @@ import scalafx.scene.paint.Color
 import scalafx.scene.shape.SVGPath
 import scalafx.util.Duration
 
-import scala.collection.mutable
+import scala.collection.mutable as mutable
+import scala.collection.immutable as immutable
 
 class SudokuBoardView(
     gameController: SudokuGameController,
@@ -95,6 +96,44 @@ class SudokuBoardView(
   private def _labelStyle(textColor: String, fontWeight: Int): String =
     s"-fx-text-fill: $textColor; -fx-font-size: 28px; -fx-font-weight: $fontWeight; -fx-font-family: $_fontFamily;"
 
+  private def _notesGridStyle(textColor: String): String =
+    s"-fx-text-fill: $textColor; -fx-font-size: 10px; -fx-font-weight: 600; -fx-font-family: $_fontFamily;"
+
+  private def _createNotesGrid(
+      notes: immutable.SortedSet[Int],
+      conflicts: mutable.Set[Int]
+  ): GridPane = {
+    val grid = new GridPane {
+      hgap = 1
+      vgap = 1
+      padding = Insets(2)
+      prefWidth = _cellSize
+      prefHeight = _cellSize
+    }
+
+    for (num <- 1 to 9) {
+      val row = (num - 1) / 3
+      val col = (num - 1) % 3
+
+      val label = new Label(if (notes.contains(num)) num.toString else "") {
+        mouseTransparent = true
+        minWidth = 14
+        minHeight = 14
+        prefWidth = 14
+        prefHeight = 14
+        alignment = Pos.Center
+        val textColor =
+          if (notes.contains(num) && conflicts.contains(num)) "#FCA5A5"
+          else "#94A3B8"
+        style = _notesGridStyle(textColor)
+      }
+
+      grid.add(label, col, row)
+    }
+
+    grid
+  }
+
   private def _createCell(row: Int, col: Int): StackPane = {
     val label = new Label("") {
       mouseTransparent = true
@@ -128,7 +167,7 @@ class SudokuBoardView(
     val cell = gameState.board.getCell(row, col)
     val selected =
       gameState.selectedRow.contains(row) && gameState.selectedCol.contains(col)
-    val wrong = gameState.conflicts(row)(col)
+    val conflicts = gameState.conflicts(row)(col)
 
     val related =
       gameState.selectedRow.contains(row) ||
@@ -148,21 +187,28 @@ class SudokuBoardView(
       selectedValue.exists(value => value != 0 && cell.value == value)
 
     val background =
-      if (wrong) "#7F1D1D"
+      if (!conflicts.isEmpty && cell.value != 0) "#7F1D1D"
       else if (selected) "#1D4ED8"
       else if (related) "#334155"
       else if (sameValue) "#1E3A8A"
       else if (cell.isGiven) _givenCellBg
       else _boardBg
 
-    val textColor =
-      if (wrong) "#FCA5A5"
-      else if (selected) _textMain
-      else if (cell.isGiven) _textMain
-      else _playerNumber
+    if (cell.notes.nonEmpty) {
+      val notesGrid = _createNotesGrid(cell.notes, conflicts)
+      cellPane.children = Seq(notesGrid)
+    } else {
+      val textColor =
+        if (conflicts.contains(cell.value)) "#FCA5A5"
+        else if (selected) _textMain
+        else if (cell.isGiven) _textMain
+        else _playerNumber
 
-    label.text = if (cell.value == 0) "" else cell.value.toString
-    label.style = _labelStyle(textColor, if (cell.isGiven) 800 else 600)
+      label.text = if (cell.value == 0) "" else cell.value.toString
+      label.style = _labelStyle(textColor, if (cell.isGiven) 800 else 600)
+      cellPane.children = Seq(label)
+    }
+
     cellPane.style = _cellStyle(row, col, background)
   }
 
@@ -301,6 +347,7 @@ class SudokuBoardView(
     prefWidth = 336
     prefHeight = 58
     style = _styleButton(_panelBg, _textMain, "#324663", 16)
+    onAction = _ => gameController.toggleNotesMode()
   }
 
   private def numberButton(number: Int): Button = new Button(number.toString) {
@@ -366,6 +413,8 @@ class SudokuBoardView(
     _errorLabel.text = s"Errors: ${gameState.errorCount}/${gameState.maxErrors}"
     _setHistoryButtonState(undoBtn, gameState.canUndo)
     _setHistoryButtonState(redoBtn, gameState.canRedo)
+    notesButton.text =
+      if (gameState.isNotesMode) "✎  Notes Mode ON" else "✎  Notes Mode OFF"
 
     for {
       row <- 0 until _boardSize

@@ -2,6 +2,7 @@ package SudokuGame.controller
 
 import SudokuGame.model.{BoardMove, GameState, SudokuBoard}
 import scalafx.beans.property.ObjectProperty
+import scala.collection.immutable
 
 class SudokuGameController {
   private val _gameStateProperty =
@@ -32,11 +33,28 @@ class SudokuGameController {
     val previousValue = gameState.board.getCellValue(row, col)
     if (value == previousValue)
       return
+    val previousConflicts = gameState.conflicts(row)(col).toSet
+    val previousNotes = gameState.board.getCellNotes(row, col)
 
-    gameState.board.move(row, col, value)
-    gameState = gameState.recordMove(BoardMove(row, col, previousValue, value))
+    gameState.board.updateCell(row, col, value, gameState.isNotesMode)
+    val currentValue = gameState.board.getCellValue(row, col)
+    val currentNotes = gameState.board.getCellNotes(row, col)
+    gameState = gameState.recordMove(
+      BoardMove(
+        row,
+        col,
+        previousValue,
+        previousNotes,
+        currentValue,
+        currentNotes
+      )
+    )
 
-    if (gameState.conflicts(row)(col)) {
+    if (
+      !gameState.isNotesMode && gameState
+        .conflicts(row)(col)
+        .toSet != previousConflicts
+    ) {
       gameState = gameState.copy(
         errorCount = gameState.errorCount + 1
       )
@@ -60,10 +78,23 @@ class SudokuGameController {
     if (gameState.board.isCellGiven(row, col)) return
 
     val previousValue = gameState.board.getCellValue(row, col)
-    if (previousValue == 0) return
+    val previousNotes = gameState.board.getCellNotes(row, col)
 
-    gameState.board.move(row, col, 0)
-    gameState = gameState.recordMove(BoardMove(row, col, previousValue, 0))
+    if (previousValue == 0 && previousNotes.isEmpty) return
+
+    gameState.board.updateCell(row, col, 0, false)
+    val currentValue = gameState.board.getCellValue(row, col)
+    val currentNotes = gameState.board.getCellNotes(row, col)
+    gameState = gameState.recordMove(
+      BoardMove(
+        row,
+        col,
+        previousValue,
+        previousNotes,
+        currentValue,
+        currentNotes
+      )
+    )
 
     gameStateProperty.value = gameState
   }
@@ -74,7 +105,12 @@ class SudokuGameController {
     val (updatedState, moveOpt) = gameState.popUndoMove()
     moveOpt match {
       case Some(move) =>
-        gameState.board.move(move.row, move.col, move.previousValue)
+        gameState.board.updateCell(
+          move.row,
+          move.col,
+          move.previousValue,
+          move.previousNotes
+        )
       case None => ()
     }
 
@@ -88,7 +124,12 @@ class SudokuGameController {
     val (updatedState, moveOpt) = gameState.popRedoMove()
     moveOpt match {
       case Some(move) =>
-        gameState.board.move(move.row, move.col, move.newValue)
+        gameState.board.updateCell(
+          move.row,
+          move.col,
+          move.newValue,
+          move.newNotes
+        )
       case None => ()
     }
 
@@ -107,6 +148,13 @@ class SudokuGameController {
     if (gameState == null || gameState.isGameOver) return
 
     gameState = gameState.incrementTime()
+    gameStateProperty.value = gameState
+  }
+
+  def toggleNotesMode(): Unit = {
+    if (gameState == null || gameState.isGameOver) return
+
+    gameState = gameState.copy(isNotesMode = !gameState.isNotesMode)
     gameStateProperty.value = gameState
   }
 }
