@@ -19,7 +19,7 @@ class SudokuGameController {
   }
 
   def placeNumber(value: Int): Unit = {
-    if (gameState == null || gameState.isGameOver) return
+    if (gameState == null || gameState.isGameOver || gameState.isPaused) return
 
     if (gameState.selectedRow.isEmpty || gameState.selectedCol.isEmpty) return
 
@@ -68,7 +68,7 @@ class SudokuGameController {
   }
 
   def clearCell(): Unit = {
-    if (gameState == null || gameState.isGameOver) return
+    if (gameState == null || gameState.isGameOver || gameState.isPaused) return
 
     if (gameState.selectedRow.isEmpty || gameState.selectedCol.isEmpty) return
 
@@ -100,7 +100,7 @@ class SudokuGameController {
   }
 
   def undo(): Unit = {
-    if (gameState == null || gameState.isGameOver) return
+    if (gameState == null || gameState.isGameOver || gameState.isPaused) return
 
     val (updatedState, moveOpt) = gameState.popUndoMove()
     moveOpt match {
@@ -119,7 +119,7 @@ class SudokuGameController {
   }
 
   def redo(): Unit = {
-    if (gameState == null || gameState.isGameOver) return
+    if (gameState == null || gameState.isGameOver || gameState.isPaused) return
 
     val (updatedState, moveOpt) = gameState.popRedoMove()
     moveOpt match {
@@ -138,14 +138,14 @@ class SudokuGameController {
   }
 
   def selectCell(row: Int, col: Int): Unit = {
-    if (gameState == null || gameState.isGameOver) return
+    if (gameState == null || gameState.isGameOver || gameState.isPaused) return
 
     gameState = gameState.selectCell(row, col)
     gameStateProperty.value = gameState
   }
 
   def moveSelection(deltaRow: Int, deltaCol: Int): Unit = {
-    if (gameState == null || gameState.isGameOver) return
+    if (gameState == null || gameState.isGameOver || gameState.isPaused) return
 
     val currentRow = gameState.selectedRow.getOrElse(0)
     val currentCol = gameState.selectedCol.getOrElse(0)
@@ -157,16 +157,23 @@ class SudokuGameController {
   }
 
   def updateTime(): Unit = {
-    if (gameState == null || gameState.isGameOver) return
+    if (gameState == null || gameState.isGameOver || gameState.isPaused) return
 
     gameState = gameState.incrementTime()
     gameStateProperty.value = gameState
   }
 
   def toggleNotesMode(): Unit = {
-    if (gameState == null || gameState.isGameOver) return
+    if (gameState == null || gameState.isGameOver || gameState.isPaused) return
 
     gameState = gameState.copy(isNotesMode = !gameState.isNotesMode)
+    gameStateProperty.value = gameState
+  }
+
+  def togglePause(): Unit = {
+    if (gameState == null || gameState.isGameOver) return
+
+    gameState = gameState.copy(isPaused = !gameState.isPaused)
     gameStateProperty.value = gameState
   }
 }
