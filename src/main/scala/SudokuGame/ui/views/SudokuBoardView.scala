@@ -2,9 +2,11 @@ package SudokuGame.ui.views
 
 import SudokuGame.controller.SudokuGameController
 import SudokuGame.model.GameState
+import scalafx.Includes.jfxKeyEvent2sfx
 import scalafx.animation.{Animation, KeyFrame, Timeline}
 import scalafx.geometry.{Insets, Pos}
 import scalafx.scene.control.{Button, ContentDisplay, Label}
+import scalafx.scene.input.KeyCode
 import scalafx.scene.layout.{GridPane, HBox, Priority, Region, StackPane, VBox}
 import scalafx.scene.paint.Color
 import scalafx.scene.shape.SVGPath
@@ -99,6 +101,31 @@ class SudokuBoardView(
   private def _notesGridStyle(textColor: String): String =
     s"-fx-text-fill: $textColor; -fx-font-size: 10px; -fx-font-weight: 600; -fx-font-family: $_fontFamily;"
 
+  private def _focusBoard(): Unit =
+    view.requestFocus()
+
+  private def _handleKeyPress(keyCode: KeyCode): Unit = {
+    val digit = keyCode match {
+      case KeyCode.DIGIT1 | KeyCode.NUMPAD1 => Some(1)
+      case KeyCode.DIGIT2 | KeyCode.NUMPAD2 => Some(2)
+      case KeyCode.DIGIT3 | KeyCode.NUMPAD3 => Some(3)
+      case KeyCode.DIGIT4 | KeyCode.NUMPAD4 => Some(4)
+      case KeyCode.DIGIT5 | KeyCode.NUMPAD5 => Some(5)
+      case KeyCode.DIGIT6 | KeyCode.NUMPAD6 => Some(6)
+      case KeyCode.DIGIT7 | KeyCode.NUMPAD7 => Some(7)
+      case KeyCode.DIGIT8 | KeyCode.NUMPAD8 => Some(8)
+      case KeyCode.DIGIT9 | KeyCode.NUMPAD9 => Some(9)
+      case _                                => None
+    }
+
+    digit match {
+      case Some(value) => gameController.placeNumber(value)
+      case None if keyCode == KeyCode.BACK_SPACE || keyCode == KeyCode.DELETE =>
+        gameController.clearCell()
+      case _ => ()
+    }
+  }
+
   private def _createNotesGrid(
       notes: immutable.SortedSet[Int],
       conflicts: mutable.Set[Int]
@@ -149,7 +176,10 @@ class SudokuBoardView(
       maxHeight = _cellSize
       alignment = Pos.Center
       children = Seq(label)
-      onMouseClicked = _ => gameController.selectCell(row, col)
+      onMouseClicked = _ => {
+        gameController.selectCell(row, col)
+        _focusBoard()
+      }
       style = _cellStyle(row, col, _boardBg)
     }
 
@@ -405,6 +435,9 @@ class SudokuBoardView(
     spacing = 0
     style = s"-fx-background-color: $_surfaceBg;"
     alignment = Pos.TopCenter
+    focusTraversable = true
+    onMouseClicked = _ => _focusBoard()
+    onKeyPressed = event => _handleKeyPress(event.code)
     children = Seq(gameContent)
   }
 
