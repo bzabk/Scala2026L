@@ -2,7 +2,7 @@ package SudokuGame.ui.views
 
 import SudokuGame.controller.SudokuGameController
 import SudokuGame.model.GameState
-import scalafx.Includes.jfxKeyEvent2sfx
+import scalafx.Includes.{jfxKeyEvent2sfx, jfxScene2sfx}
 import scalafx.animation.{Animation, KeyFrame, Timeline}
 import scalafx.geometry.{Insets, Pos}
 import scalafx.scene.control.{Button, ContentDisplay, Label}
@@ -55,11 +55,6 @@ class SudokuBoardView(
     cycleCount = Animation.Indefinite
   }
 
-  private val _gameStateSubscription: Unit =
-    gameController.gameStateProperty.onChange { (_, _, newState) =>
-      if (newState != null) updateBoardDisplay(newState)
-    }
-
   private def _setHistoryButtonState(button: Button, enabled: Boolean): Unit = {
     button.disable = !enabled
     button.opacity = if (enabled) 1.0 else 0.55
@@ -104,7 +99,127 @@ class SudokuBoardView(
   private def _focusBoard(): Unit =
     view.requestFocus()
 
+  private def _togglePause(): Unit = {
+    gameController.togglePause()
+    _focusBoard()
+  }
+
+  private def _setTimerRunning(running: Boolean): Unit = {
+    if (running) {
+      if (_timerTimeline.status != Animation.Status.Running) {
+        _timerTimeline.playFromStart()
+      }
+    } else {
+      _timerTimeline.stop()
+    }
+  }
+
+  private def _lucideIcon(
+      path: String,
+      color: String,
+      scale: Double = 1.0
+  ): SVGPath =
+    new SVGPath {
+      content = path
+      fill = Color.Transparent
+      stroke = Color.web(color)
+      strokeWidth = 2
+      strokeLineCap = scalafx.scene.shape.StrokeLineCap.Round
+      strokeLineJoin = scalafx.scene.shape.StrokeLineJoin.Round
+      scaleX = scale
+      scaleY = scale
+    }
+
+  private def _roundedRectPath(
+      x: Double,
+      y: Double,
+      width: Double,
+      height: Double,
+      radius: Double = 1.0
+  ): String =
+    s"M${x + radius} $y H${x + width - radius} A$radius $radius 0 0 1 ${x + width} ${y + radius} V${y + height - radius} A$radius $radius 0 0 1 ${x + width - radius} ${y + height} H${x + radius} A$radius $radius 0 0 1 $x ${y + height - radius} V${y + radius} A$radius $radius 0 0 1 ${x + radius} $y Z"
+
+  private def _pauseButtonGraphic(isPaused: Boolean): SVGPath =
+    if (isPaused)
+      _lucideIcon("M6 3L20 12L6 21Z", _textMain, scale = 0.95)
+    else
+      _lucideIcon(
+        s"${_roundedRectPath(14, 4, 4, 16)} ${_roundedRectPath(6, 4, 4, 16)}",
+        _textMain,
+        scale = 0.95
+      )
+
+  private def _pausedOverlayGraphic(): SVGPath =
+    _lucideIcon(
+      s"${_roundedRectPath(14, 4, 4, 16)} ${_roundedRectPath(6, 4, 4, 16)}",
+      "#2F7BFF",
+      scale = 1.75
+    )
+
+  private def _notesButtonGraphic(): SVGPath =
+    _lucideIcon(
+      "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z m-6.174-1.812 4 4",
+      _textMain,
+      scale = 0.9
+    )
+
+  private val _pauseButton = new Button("▌▌") {
+    prefWidth = 46
+    prefHeight = 46
+    style =
+      s"-fx-background-color: rgba(255,255,255,0.08); -fx-text-fill: $_textMain; -fx-font-size: 18px; -fx-font-weight: 900; -fx-font-family: $_fontFamily; -fx-background-radius: 12; -fx-cursor: hand;"
+    graphic = _pauseButtonGraphic(isPaused = false)
+    text = ""
+    contentDisplay = ContentDisplay.GraphicOnly
+    onAction = _ => _togglePause()
+  }
+
+  private val _pausedTitle = new Label("Game paused") {
+    style =
+      s"-fx-text-fill: $_textMain; -fx-font-size: 32px; -fx-font-weight: 900; -fx-font-family: $_fontFamily;"
+  }
+
+  private val _pausedIcon = new StackPane {
+    alignment = Pos.Center
+    children = Seq(_pausedOverlayGraphic())
+  }
+
+  private val _continueButton = new Button("Continue game") {
+    prefWidth = 190
+    prefHeight = 54
+    style = _styleButton("#2563EB", _textMain, "#2563EB", 15)
+    onAction = _ => _togglePause()
+  }
+
+  private val _pausedPanel = new VBox {
+    spacing = 20
+    alignment = Pos.Center
+    padding = Insets(16)
+    prefWidth = _cellSize * _boardSize + 8
+    prefHeight = _cellSize * _boardSize + 8
+    maxWidth = _cellSize * _boardSize + 8
+    maxHeight = _cellSize * _boardSize + 8
+    style =
+      s"-fx-background-color: #0B1A45; -fx-border-color: #223A61; -fx-border-width: 2; -fx-background-radius: 8; -fx-border-radius: 8;"
+    children = Seq(_pausedIcon, _pausedTitle, _continueButton)
+  }
+
   private def _handleKeyPress(keyCode: KeyCode): Unit = {
+    if (keyCode == KeyCode.P || keyCode == KeyCode.ESCAPE) {
+      gameController.togglePause()
+      _focusBoard()
+      return
+    }
+
+    if (keyCode == KeyCode.N) {
+      gameController.toggleNotesMode()
+      _focusBoard()
+      return
+    }
+
+    if (gameController.gameState != null && gameController.gameState.isPaused)
+      return
+
     keyCode match {
       case KeyCode.LEFT =>
         gameController.moveSelection(0, -1)
@@ -129,9 +244,6 @@ class SudokuBoardView(
         _focusBoard()
       case KeyCode.PAGE_DOWN =>
         gameController.moveSelection(8, 0)
-        _focusBoard()
-      case KeyCode.N =>
-        gameController.toggleNotesMode()
         _focusBoard()
       case _ =>
     }
@@ -288,6 +400,20 @@ class SudokuBoardView(
     } add(_createCell(row, col), col, row)
   }
 
+  private val _boardArea = new StackPane {
+    alignment = Pos.Center
+    prefWidth = _cellSize * _boardSize + 8
+    prefHeight = _cellSize * _boardSize + 8
+    minWidth = _cellSize * _boardSize + 8
+    minHeight = _cellSize * _boardSize + 8
+    maxWidth = _cellSize * _boardSize + 8
+    maxHeight = _cellSize * _boardSize + 8
+    children = Seq(_boardGrid, _pausedPanel)
+  }
+
+  StackPane.setAlignment(_pausedPanel, Pos.Center)
+  StackPane.setAlignment(_boardGrid, Pos.Center)
+
   private val _backButton = new Button("←  Back") {
     style =
       s"-fx-background-color: transparent; -fx-text-fill: $_textMuted; -fx-font-size: 15px; -fx-font-weight: 700; -fx-font-family: $_fontFamily; -fx-cursor: hand;"
@@ -323,10 +449,7 @@ class SudokuBoardView(
     style = "-fx-background-color: #243149; -fx-background-radius: 14;"
     children = Seq(
       _timerLabel,
-      new Label("▌▌") {
-        style =
-          s"-fx-text-fill: $_textMuted; -fx-font-size: 16px; -fx-font-family: $_fontFamily;"
-      }
+      _pauseButton
     )
   }
 
@@ -406,10 +529,13 @@ class SudokuBoardView(
     children = Seq(undoBtn, redoBtn, deleteBtn, helpBadge)
   }
 
-  private val notesButton = new Button("✎  Notes Mode OFF") {
+  private val notesButton = new Button("Notes Mode OFF") {
     prefWidth = 336
     prefHeight = 58
     style = _styleButton(_panelBg, _textMain, "#324663", 16)
+    graphic = _notesButtonGraphic()
+    contentDisplay = ContentDisplay.Left
+    graphicTextGap = 10
     onAction = _ => gameController.toggleNotesMode()
   }
 
@@ -449,7 +575,7 @@ class SudokuBoardView(
   private val boardColumn = new VBox {
     alignment = Pos.TopCenter
     maxWidth = 500
-    children = Seq(_statusRow, _boardGrid)
+    children = Seq(_statusRow, _boardArea)
   }
 
   private val contentRow = new HBox {
@@ -458,10 +584,14 @@ class SudokuBoardView(
     children = Seq(boardColumn, controlsPanel)
   }
 
+  private val _mainArea = new StackPane {
+    children = Seq(contentRow)
+  }
+
   private val gameContent = new VBox {
     padding = Insets(28, 24, 30, 24)
     maxWidth = 980
-    children = Seq(_topBar, contentRow)
+    children = Seq(_topBar, _mainArea)
   }
 
   val view = new VBox {
@@ -470,8 +600,13 @@ class SudokuBoardView(
     alignment = Pos.TopCenter
     focusTraversable = true
     onMouseClicked = _ => _focusBoard()
-    onKeyPressed = event => _handleKeyPress(event.code)
     children = Seq(gameContent)
+  }
+
+  view.scene.onChange { (_, _, newScene) =>
+    if (newScene != null) {
+      newScene.onKeyPressed = event => _handleKeyPress(event.code)
+    }
   }
 
   private def updateBoardDisplay(gameState: GameState): Unit = {
@@ -479,8 +614,15 @@ class SudokuBoardView(
     _errorLabel.text = s"Errors: ${gameState.errorCount}/${gameState.maxErrors}"
     _setHistoryButtonState(undoBtn, gameState.canUndo)
     _setHistoryButtonState(redoBtn, gameState.canRedo)
+    _setTimerRunning(!gameState.isPaused)
+
+    _pausedPanel.visible = gameState.isPaused
+    _pausedPanel.managed = gameState.isPaused
+    _boardGrid.visible = !gameState.isPaused
+    _boardGrid.managed = !gameState.isPaused
+    _pauseButton.graphic = _pauseButtonGraphic(gameState.isPaused)
     notesButton.text =
-      if (gameState.isNotesMode) "✎  Notes Mode ON" else "✎  Notes Mode OFF"
+      if (gameState.isNotesMode) "Notes Mode ON" else "Notes Mode OFF"
 
     for {
       row <- 0 until _boardSize
@@ -492,14 +634,17 @@ class SudokuBoardView(
       }
   }
 
+  private val _gameStateSubscription: Unit =
+    gameController.gameStateProperty.onChange { (_, _, newState) =>
+      if (newState != null) updateBoardDisplay(newState)
+    }
+
   if (gameController.gameState != null)
     updateBoardDisplay(gameController.gameState)
 
   def startTimer(): Unit = {
-    if (_timerTimeline.status != Animation.Status.Running) {
-      _timerTimeline.playFromStart()
-    }
+    _setTimerRunning(true)
   }
 
-  def stop(): Unit = _timerTimeline.stop()
+  def stop(): Unit = _setTimerRunning(false)
 }
