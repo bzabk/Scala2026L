@@ -105,6 +105,34 @@ class SudokuBoardView(
     view.requestFocus()
 
   private def _handleKeyPress(keyCode: KeyCode): Unit = {
+    keyCode match {
+      case KeyCode.LEFT =>
+        gameController.moveSelection(0, -1)
+        _focusBoard()
+      case KeyCode.RIGHT =>
+        gameController.moveSelection(0, 1)
+        _focusBoard()
+      case KeyCode.UP =>
+        gameController.moveSelection(-1, 0)
+        _focusBoard()
+      case KeyCode.DOWN =>
+        gameController.moveSelection(1, 0)
+        _focusBoard()
+      case KeyCode.HOME =>
+        gameController.moveSelection(0, -8)
+        _focusBoard()
+      case KeyCode.END =>
+        gameController.moveSelection(0, 8)
+        _focusBoard()
+      case KeyCode.PAGE_UP =>
+        gameController.moveSelection(-8, 0)
+        _focusBoard()
+      case KeyCode.PAGE_DOWN =>
+        gameController.moveSelection(8, 0)
+        _focusBoard()
+      case _ =>
+    }
+
     val digit = keyCode match {
       case KeyCode.DIGIT1 | KeyCode.NUMPAD1 => Some(1)
       case KeyCode.DIGIT2 | KeyCode.NUMPAD2 => Some(2)
@@ -122,6 +150,8 @@ class SudokuBoardView(
       case Some(value) => gameController.placeNumber(value)
       case None if keyCode == KeyCode.BACK_SPACE || keyCode == KeyCode.DELETE =>
         gameController.clearCell()
+      case None if keyCode == KeyCode.SPACE =>
+        _focusBoard()
       case _ => ()
     }
   }
