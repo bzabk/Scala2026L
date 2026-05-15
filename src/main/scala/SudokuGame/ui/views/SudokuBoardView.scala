@@ -130,6 +130,9 @@ class SudokuBoardView(
       case KeyCode.PAGE_DOWN =>
         gameController.moveSelection(8, 0)
         _focusBoard()
+      case KeyCode.N =>
+        gameController.toggleNotesMode()
+        _focusBoard()
       case _ =>
     }
 
