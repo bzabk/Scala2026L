@@ -7,6 +7,10 @@ import scala.collection.immutable
 class SudokuGameController {
   private val _gameStateProperty =
     new ObjectProperty[GameState](this, "gameState", null)
+  private var _initialBoard: Array[Array[Int]] = Array.empty
+
+  private def _cloneBoard(board: Array[Array[Int]]): Array[Array[Int]] =
+    board.map(_.clone())
 
   def gameState: GameState = _gameStateProperty.value
   def gameState_=(state: GameState): Unit = _gameStateProperty.value = state
@@ -14,8 +18,19 @@ class SudokuGameController {
   def gameStateProperty: ObjectProperty[GameState] = _gameStateProperty
 
   def startNewGame(initialBoard: Array[Array[Int]]): Unit = {
-    val board = new SudokuBoard(initialBoard)
+    _initialBoard = _cloneBoard(initialBoard)
+    val board = new SudokuBoard(_cloneBoard(initialBoard))
     gameState = GameState(board = board)
+  }
+
+  def restartGame(): Unit = {
+    if (_initialBoard.isEmpty) return
+
+    startNewGame(_cloneBoard(_initialBoard))
+  }
+
+  def clearGameState(): Unit = {
+    gameState = null
   }
 
   def placeNumber(value: Int): Unit = {
@@ -31,12 +46,12 @@ class SudokuGameController {
     if (gameState.board.isCellGiven(row, col)) return
 
     val previousValue = gameState.board.getCellValue(row, col)
-    if (value == previousValue)
-      return
+    val updatedValue =
+      if (!gameState.isNotesMode && value == previousValue) 0 else value
     val previousConflicts = gameState.conflicts(row)(col).toSet
     val previousNotes = gameState.board.getCellNotes(row, col)
 
-    gameState.board.updateCell(row, col, value, gameState.isNotesMode)
+    gameState.board.updateCell(row, col, updatedValue, gameState.isNotesMode)
     val currentValue = gameState.board.getCellValue(row, col)
     val currentNotes = gameState.board.getCellNotes(row, col)
     gameState = gameState.recordMove(
@@ -51,7 +66,7 @@ class SudokuGameController {
     )
 
     if (
-      !gameState.isNotesMode && gameState
+      !gameState.isNotesMode && currentValue != 0 && gameState
         .conflicts(row)(col)
         .toSet != previousConflicts
     ) {

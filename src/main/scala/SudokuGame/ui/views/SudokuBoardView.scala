@@ -7,6 +7,7 @@ import scalafx.animation.{Animation, KeyFrame, Timeline}
 import scalafx.geometry.{Insets, Pos}
 import scalafx.scene.control.{Button, ContentDisplay, Label}
 import scalafx.scene.input.KeyCode
+import javafx.scene.input.KeyEvent
 import scalafx.scene.layout.{GridPane, HBox, Priority, Region, StackPane, VBox}
 import scalafx.scene.paint.Color
 import scalafx.scene.shape.SVGPath
@@ -156,6 +157,12 @@ class SudokuBoardView(
       scale = 1.75
     )
 
+  private def _gameOverGraphic(isSuccess: Boolean): SVGPath =
+    if (isSuccess)
+      _lucideIcon("M20 6 9 17l-5-5", "#4ADE80", scale = 1.9)
+    else
+      _lucideIcon("M18 6 6 18 M6 6l12 12", "#EF4444", scale = 1.9)
+
   private def _notesButtonGraphic(): SVGPath =
     _lucideIcon(
       "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z m-6.174-1.812 4 4",
@@ -202,6 +209,41 @@ class SudokuBoardView(
     style =
       s"-fx-background-color: #0B1A45; -fx-border-color: #223A61; -fx-border-width: 2; -fx-background-radius: 8; -fx-border-radius: 8;"
     children = Seq(_pausedIcon, _pausedTitle, _continueButton)
+  }
+
+  private val _gameOverTitle = new Label("Puzzle solved") {
+    style =
+      s"-fx-text-fill: $_textMain; -fx-font-size: 32px; -fx-font-weight: 900; -fx-font-family: $_fontFamily;"
+  }
+
+  private val _gameOverMessage = new Label("You completed the puzzle.") {
+    style =
+      s"-fx-text-fill: $_textMuted; -fx-font-size: 15px; -fx-font-weight: 700; -fx-font-family: $_fontFamily;"
+  }
+
+  private val _gameOverButton = new Button("Try again") {
+    prefWidth = 190
+    prefHeight = 54
+    style = _styleButton("#2563EB", _textMain, "#2563EB", 15)
+    onAction = _ => gameController.restartGame()
+  }
+
+  private val _gameOverIcon = new StackPane {
+    alignment = Pos.Center
+  }
+
+  private val _gameOverPanel = new VBox {
+    spacing = 20
+    alignment = Pos.Center
+    padding = Insets(16)
+    prefWidth = _cellSize * _boardSize + 8
+    prefHeight = _cellSize * _boardSize + 8
+    maxWidth = _cellSize * _boardSize + 8
+    maxHeight = _cellSize * _boardSize + 8
+    style =
+      s"-fx-background-color: #102A1E; -fx-border-color: #22C55E; -fx-border-width: 2; -fx-background-radius: 8; -fx-border-radius: 8;"
+    children =
+      Seq(_gameOverIcon, _gameOverTitle, _gameOverMessage, _gameOverButton)
   }
 
   private def _handleKeyPress(keyCode: KeyCode): Unit = {
@@ -408,11 +450,12 @@ class SudokuBoardView(
     minHeight = _cellSize * _boardSize + 8
     maxWidth = _cellSize * _boardSize + 8
     maxHeight = _cellSize * _boardSize + 8
-    children = Seq(_boardGrid, _pausedPanel)
+    children = Seq(_boardGrid, _pausedPanel, _gameOverPanel)
   }
 
   StackPane.setAlignment(_pausedPanel, Pos.Center)
   StackPane.setAlignment(_boardGrid, Pos.Center)
+  StackPane.setAlignment(_gameOverPanel, Pos.Center)
 
   private val _backButton = new Button("←  Back") {
     style =
@@ -605,7 +648,10 @@ class SudokuBoardView(
 
   view.scene.onChange { (_, _, newScene) =>
     if (newScene != null) {
-      newScene.onKeyPressed = event => _handleKeyPress(event.code)
+      newScene.delegate.addEventFilter(
+        KeyEvent.KEY_PRESSED,
+        event => _handleKeyPress(event.code)
+      )
     }
   }
 
@@ -614,15 +660,35 @@ class SudokuBoardView(
     _errorLabel.text = s"Errors: ${gameState.errorCount}/${gameState.maxErrors}"
     _setHistoryButtonState(undoBtn, gameState.canUndo)
     _setHistoryButtonState(redoBtn, gameState.canRedo)
-    _setTimerRunning(!gameState.isPaused)
+    _setTimerRunning(!gameState.isPaused && !gameState.isGameOver)
+
+    val gameIsOver = gameState.isGameOver
+    val gameWasWon = gameState.isSolved
+    val gameWasLost = gameState.isLost
 
     _pausedPanel.visible = gameState.isPaused
     _pausedPanel.managed = gameState.isPaused
-    _boardGrid.visible = !gameState.isPaused
-    _boardGrid.managed = !gameState.isPaused
+    _gameOverPanel.visible = gameIsOver
+    _gameOverPanel.managed = gameIsOver
+    _boardGrid.visible = !gameState.isPaused && !gameIsOver
+    _boardGrid.managed = !gameState.isPaused && !gameIsOver
     _pauseButton.graphic = _pauseButtonGraphic(gameState.isPaused)
     notesButton.text =
       if (gameState.isNotesMode) "Notes Mode ON" else "Notes Mode OFF"
+
+    if (gameWasWon) {
+      _gameOverPanel.style =
+        s"-fx-background-color: #102A1E; -fx-border-color: #22C55E; -fx-border-width: 2; -fx-background-radius: 8; -fx-border-radius: 8;"
+      _gameOverTitle.text = "Puzzle solved"
+      _gameOverMessage.text = s"Finished in ${gameState.formatTime()}"
+      _gameOverIcon.children = Seq(_gameOverGraphic(isSuccess = true))
+    } else if (gameWasLost) {
+      _gameOverPanel.style =
+        s"-fx-background-color: #2A1111; -fx-border-color: #EF4444; -fx-border-width: 2; -fx-background-radius: 8; -fx-border-radius: 8;"
+      _gameOverTitle.text = "Game over"
+      _gameOverMessage.text = "Too many errors. Try again."
+      _gameOverIcon.children = Seq(_gameOverGraphic(isSuccess = false))
+    }
 
     for {
       row <- 0 until _boardSize
