@@ -144,6 +144,18 @@ class SudokuGameController {
     gameStateProperty.value = gameState
   }
 
+  def moveSelection(deltaRow: Int, deltaCol: Int): Unit = {
+    if (gameState == null || gameState.isGameOver) return
+
+    val currentRow = gameState.selectedRow.getOrElse(0)
+    val currentCol = gameState.selectedCol.getOrElse(0)
+    val nextRow = (currentRow + deltaRow).max(0).min(8)
+    val nextCol = (currentCol + deltaCol).max(0).min(8)
+
+    gameState = gameState.selectCell(nextRow, nextCol)
+    gameStateProperty.value = gameState
+  }
+
   def updateTime(): Unit = {
     if (gameState == null || gameState.isGameOver) return
 
