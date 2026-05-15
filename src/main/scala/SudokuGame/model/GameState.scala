@@ -1,6 +1,15 @@
 package SudokuGame.model
+import scala.collection.immutable as immutable
+import scala.collection.mutable as mutable
 
-case class BoardMove(row: Int, col: Int, previousValue: Int, newValue: Int)
+case class BoardMove(
+    row: Int,
+    col: Int,
+    previousValue: Int,
+    previousNotes: immutable.SortedSet[Int],
+    newValue: Int,
+    newNotes: immutable.SortedSet[Int]
+)
 
 case class GameState(
     board: SudokuBoard,
@@ -11,6 +20,7 @@ case class GameState(
     selectedCol: Option[Int] = None,
     moveHistory: List[BoardMove] = Nil,
     redoHistory: List[BoardMove] = Nil,
+    isNotesMode: Boolean = false,
     isPaused: Boolean = false,
     isGameOver: Boolean = false
 ) {
@@ -68,7 +78,8 @@ case class GameState(
 
   def canRedo: Boolean = redoHistory.nonEmpty
 
-  def conflicts: Array[Array[Boolean]] = board.conflicts
+  def conflicts: Array[Array[mutable.Set[Int]]] =
+    board.conflicts
 
   def isSolved: Boolean = board.isSolved
 

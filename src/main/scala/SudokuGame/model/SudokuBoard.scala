@@ -1,13 +1,18 @@
 package SudokuGame.model
 
+import scala.collection.immutable as immutable
+import scala.collection.mutable as mutable
+
 case class SudokuCell(
     value: Int = 0, // 0 means empty
+    notes: immutable.SortedSet[Int] = immutable.SortedSet.empty,
     isGiven: Boolean = false // true if this was given in the puzzle
 )
 
 class SudokuBoard(initialBoard: Array[Array[Int]] = Array.ofDim[Int](9, 9)) {
   private val _board: Array[Array[SudokuCell]] = Array.ofDim[SudokuCell](9, 9)
-  var conflicts: Array[Array[Boolean]] = Array.ofDim[Boolean](9, 9)
+  var conflicts: Array[Array[mutable.Set[Int]]] =
+    Array.ofDim[mutable.Set[Int]](9, 9)
 
   for {
     row <- 0 until 9
@@ -15,7 +20,7 @@ class SudokuBoard(initialBoard: Array[Array[Int]] = Array.ofDim[Int](9, 9)) {
   } {
     val value = initialBoard(row)(col)
     _board(row)(col) = SudokuCell(value = value, isGiven = value != 0)
-    conflicts(row)(col) = false
+    conflicts(row)(col) = mutable.Set.empty
   }
 
   def getCell(row: Int, col: Int): SudokuCell = _board(row)(col)
@@ -24,15 +29,45 @@ class SudokuBoard(initialBoard: Array[Array[Int]] = Array.ofDim[Int](9, 9)) {
 
   def getCellValue(row: Int, col: Int): Int = _board(row)(col).value
 
+  def getCellNotes(row: Int, col: Int): immutable.SortedSet[Int] =
+    _board(row)(col).notes
+
   def getAllCells(): Array[Array[SudokuCell]] = _board
 
-  def move(row: Int, col: Int, value: Int): Unit = {
+  def updateCell(row: Int, col: Int, value: Int, isNotesMode: Boolean): Unit = {
     val previousValue = _board(row)(col).value
 
-    _board(row)(col) = _board(row)(col).copy(value = value)
+    if (isNotesMode) {
+      var updatedNotes = _board(row)(col).notes
 
-    _updateConflictsForValue(row, col, previousValue)
-    _updateConflictsForValue(row, col, value)
+      if (updatedNotes.contains(value)) {
+        updatedNotes = updatedNotes - value
+      } else {
+        if (previousValue != 0) {
+          updatedNotes = updatedNotes + previousValue
+        }
+        updatedNotes = updatedNotes + value
+      }
+      _board(row)(col) = _board(row)(col).copy(value = 0, notes = updatedNotes)
+    } else {
+      _board(row)(col) = _board(row)(col)
+        .copy(value = value, notes = immutable.SortedSet.empty)
+    }
+
+    _updateConflictsForCell(row, col)
+  }
+
+  def updateCell(
+      row: Int,
+      col: Int,
+      value: Int,
+      notes: immutable.SortedSet[Int]
+  ): Unit = {
+    val previousValue = _board(row)(col).value
+
+    _board(row)(col) = _board(row)(col).copy(value = value, notes = notes)
+
+    _updateConflictsForCell(row, col)
   }
 
   private def _hasDuplicates(values: Seq[Int]): Boolean = {
@@ -74,8 +109,12 @@ class SudokuBoard(initialBoard: Array[Array[Int]] = Array.ofDim[Int](9, 9)) {
     ).contains(value)
   }
 
-  private def _hasConflictAt(row: Int, col: Int): Boolean = {
-    val value = _board(row)(col).value
+  private def _hasConflictAt(
+      row: Int,
+      col: Int,
+      value: Int,
+      threshold: Int
+  ): Boolean = {
     if (value == 0) false
     else {
       val rowMatches = (0 until 9).count(c => _board(row)(c).value == value)
@@ -86,28 +125,48 @@ class SudokuBoard(initialBoard: Array[Array[Int]] = Array.ofDim[Int](9, 9)) {
           c <- (col / 3) * 3 until (col / 3) * 3 + 3
         } yield _board(r)(c).value).count(_ == value)
 
-      rowMatches > 1 || colMatches > 1 || boxMatches > 1
+      rowMatches > threshold || colMatches > threshold || boxMatches > threshold
     }
   }
 
-  private def _updateConflictsForValue(row: Int, col: Int, value: Int): Unit = {
-    val cols = (0 until 9)
-      .filter(c => _board(row)(c).value == value)
-      .map((c) => (row, c))
-
-    val rows = (0 until 9)
-      .filter(r => _board(r)(col).value == value)
-      .map((r) => (r, col))
-
-    val boxRowCols = for {
+  private def _cellsToRecalculate(row: Int, col: Int): Seq[(Int, Int)] = {
+    val rowCells = (0 until 9).map(c => (row, c))
+    val colCells = (0 until 9).map(r => (r, col))
+    val boxCells = for {
       r <- (row / 3) * 3 until (row / 3) * 3 + 3
       c <- (col / 3) * 3 until (col / 3) * 3 + 3
-      if _board(r)(c).value == value
     } yield (r, c)
 
-    val distinctRowCols = (cols ++ rows ++ boxRowCols).distinct
+    (rowCells ++ colCells ++ boxCells).distinct
+  }
 
-    distinctRowCols.foreach((r, c) => conflicts(r)(c) = _hasConflictAt(r, c))
+  private def _valuesToCheckForCell(
+      row: Int,
+      col: Int,
+      selectedCell: Boolean
+  ): Seq[Int] = {
+    val cell = _board(row)(col)
+
+    if (selectedCell && cell.notes.nonEmpty) cell.notes.toSeq
+    else if (cell.value != 0) Seq(cell.value)
+    else Seq.empty
+  }
+
+  private def _updateConflictsForCell(row: Int, col: Int): Unit = {
+    _cellsToRecalculate(row, col).foreach { case (currentRow, currentCol) =>
+      val cell = _board(currentRow)(currentCol)
+      val selectedCell = currentRow == row && currentCol == col
+      val threshold = if (selectedCell && cell.notes.nonEmpty) 0 else 1
+
+      conflicts(currentRow)(currentCol).clear()
+
+      _valuesToCheckForCell(currentRow, currentCol, selectedCell).foreach {
+        value =>
+          if (_hasConflictAt(currentRow, currentCol, value, threshold)) {
+            conflicts(currentRow)(currentCol).add(value)
+          }
+      }
+    }
   }
 
   def isValid: Boolean = {
