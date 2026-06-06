@@ -22,7 +22,8 @@ case class GameState(
     redoHistory: List[BoardMove] = Nil,
     isNotesMode: Boolean = false,
     isPaused: Boolean = false,
-    isGameOver: Boolean = false
+    isGameOver: Boolean = false,
+    hintsRemaining: Int = 3
 ) {
   def selectCell(row: Int, col: Int): GameState = {
     this.copy(selectedRow = Some(row), selectedCol = Some(col))

@@ -21,8 +21,8 @@ jobs:
 
       - uses: sbt/setup-sbt@v1
 
-      - name: Compile
-        run: sbt compile
+      - name: Test
+        run: sbt test
 
   test-lambda:
     name: Lambda tests

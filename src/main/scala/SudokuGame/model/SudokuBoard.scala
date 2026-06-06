@@ -34,6 +34,12 @@ class SudokuBoard(initialBoard: Array[Array[Int]] = Array.ofDim[Int](9, 9)) {
 
   def getAllCells(): Array[Array[SudokuCell]] = _board
 
+  def values: Seq[Seq[Int]] =
+    _board.map(_.map(_.value).toSeq).toSeq
+
+  def notes: Seq[Seq[Seq[Int]]] =
+    _board.map(_.map(_.notes.toSeq).toSeq).toSeq
+
   def updateCell(row: Int, col: Int, value: Int, isNotesMode: Boolean): Unit = {
     val previousValue = _board(row)(col).value
 
@@ -68,6 +74,32 @@ class SudokuBoard(initialBoard: Array[Array[Int]] = Array.ofDim[Int](9, 9)) {
     _board(row)(col) = _board(row)(col).copy(value = value, notes = notes)
 
     _updateConflictsForCell(row, col)
+  }
+
+  def loadSnapshot(
+      values: Seq[Seq[Int]],
+      notes: Seq[Seq[Seq[Int]]]
+  ): Unit = {
+    for {
+      row <- 0 until 9
+      col <- 0 until 9
+    } {
+      val value = values.lift(row).flatMap(_.lift(col)).getOrElse(0)
+      val cellNotes = notes
+        .lift(row)
+        .flatMap(_.lift(col))
+        .getOrElse(Seq.empty)
+        .filter(value => value >= 1 && value <= 9)
+      _board(row)(col) = _board(row)(col).copy(
+        value = value,
+        notes = immutable.SortedSet.from(cellNotes)
+      )
+    }
+
+    for {
+      row <- 0 until 9
+      col <- 0 until 9
+    } _updateConflictsForCell(row, col)
   }
 
   private def _hasDuplicates(values: Seq[Int]): Boolean = {

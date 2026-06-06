@@ -52,6 +52,20 @@ def test_login_wrong_password(users_table):
     assert r["statusCode"] == 401
 
 
+def test_login_missing_body(users_table):
+    r = login.lambda_handler({}, None)
+    assert r["statusCode"] == 400
+
+
+def test_login_missing_username(users_table):
+    r = login.lambda_handler(make_event({"password": "secret123"}), None)
+    assert r["statusCode"] == 400
+
+
+def test_login_missing_password(users_table):
+    r = login.lambda_handler(make_event({"username": "user1"}), None)
+    assert r["statusCode"] == 400
+
 
 def test_hash_password_is_deterministic():
     assert login.hash_password("abc") == login.hash_password("abc")

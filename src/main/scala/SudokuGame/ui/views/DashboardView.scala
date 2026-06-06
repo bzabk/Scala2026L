@@ -1,15 +1,20 @@
 package SudokuGame.ui.views
 
-import SudokuGame.common.AppState
-import SudokuGame.controller.AuthController
-import SudokuGame.auth.domain.LoggedUser
-import javafx.event.ActionEvent
+import SudokuGame.common.{AppState, GameState as SavedGame, GameStatus}
 import SudokuGame.controller.{AuthController, SudokuGameController}
+import SudokuGame.game.service.GameService
+import SudokuGame.model.{GameState as ActiveGameState}
 import javafx.event.{ActionEvent, EventHandler}
 import javafx.scene.input.MouseEvent
+import scalafx.application.Platform
 import scalafx.geometry.{Insets, Pos}
 import scalafx.scene.control.{Button, Label, ScrollPane}
 import scalafx.scene.layout.{HBox, Priority, Region, VBox}
+
+import java.time.Instant
+import java.time.LocalDate
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.{Failure, Success, Try}
 
 enum Difficulty:
   case Easy, Medium, Hard, Expert
@@ -22,13 +27,32 @@ enum Difficulty:
       case Expert => "Expert"
   }
 
-class DashboardView(authController: AuthController, appState: AppState) {
-  private val _sudokuGameController = new SudokuGameController()
+class DashboardView(
+    authController: AuthController,
+    appState: AppState,
+    gameService: GameService
+) {
+  private var _sudokuGameController = new SudokuGameController()
 
   private val cardStyle =
     "-fx-background-color: #111827; -fx-border-color: #1e293b; -fx-border-width: 1; -fx-border-radius: 16; -fx-background-radius: 16;"
 
   private var _currentGameView: Option[SudokuBoardView] = None
+  private var _activeDifficulty: Difficulty = Difficulty.Easy
+  private var _activeGameId: String = ""
+  private var _activeCreatedAt: String = ""
+  private var _activeSessionToken: Long = 0L
+  private var _lastSaveAtMs: Long = 0L
+  private var _lastSaveSignature: String = ""
+  private var _saveInFlight = false
+  private var _pendingSave: Option[(Long, String, SavedGame, String)] = None
+  private var _cloudSaveAvailable = true
+
+  private val _saveIntervalMs = 5000L
+  private val _syncSuccess = "#4ADE80"
+  private val _syncMuted = "#94A3B8"
+  private val _syncWarning = "#FBBF24"
+  private val _syncError = "#F87171"
 
   private val contentArea = new VBox {
     style = "-fx-background-color: #0B1120;"
@@ -42,6 +66,249 @@ class DashboardView(authController: AuthController, appState: AppState) {
       case None       => Seq(loggedOutContent)
     }
   }
+
+  appState.recentGames.onChange { (_, _, _) =>
+    appState.currentUser.value.foreach { user =>
+      if (_currentGameView.isEmpty) {
+        contentArea.children = Seq(loggedInContent(user.username))
+      }
+    }
+  }
+
+  private def _currentUsername: Option[String] =
+    appState.currentUser.value.map(_.username)
+
+  private def _difficultyFromString(value: String): Difficulty =
+    value.toLowerCase match {
+      case "medium" => Difficulty.Medium
+      case "hard"   => Difficulty.Hard
+      case "expert" => Difficulty.Expert
+      case _        => Difficulty.Easy
+    }
+
+  private def _formatDuration(totalSeconds: Long): String = {
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    f"$minutes%02d:$seconds%02d"
+  }
+
+  private def _gameDate(game: SavedGame): Option[LocalDate] =
+    Try(LocalDate.parse(game.createdAt.take(10))).toOption
+
+  private def _completedGames(games: List[SavedGame]): List[SavedGame] =
+    games.filter(_.status == GameStatus.Finished)
+
+  private def _streakDays(games: List[SavedGame]): Int = {
+    val days = _completedGames(games)
+      .flatMap(_gameDate)
+      .distinct
+      .sortBy(_.toEpochDay)
+      .reverse
+    days.headOption match {
+      case None => 0
+      case Some(latest) =>
+        Iterator
+          .iterate(latest)(_.minusDays(1))
+          .zipWithIndex
+          .takeWhile { case (day, _) => days.contains(day) }
+          .length
+    }
+  }
+
+  private def _averageFinishedTime(games: List[SavedGame]): String = {
+    val finished = _completedGames(games)
+    if (finished.isEmpty) "--:--"
+    else _formatDuration(finished.map(_.elapsedSeconds).sum / finished.size)
+  }
+
+  private def _winRate(games: List[SavedGame]): String =
+    if (games.isEmpty) "--%"
+    else {
+      val finishedCount = _completedGames(games).size
+      s"${finishedCount * 100 / games.size}%"
+    }
+
+  private def _prepareActiveGame(
+      difficulty: Difficulty,
+      savedGame: Option[SavedGame] = None
+  ): Unit = {
+    _activeDifficulty = difficulty
+    _activeCreatedAt = savedGame
+      .map(_.createdAt)
+      .filter(_.nonEmpty)
+      .getOrElse(Instant.now().toString)
+    _activeGameId = savedGame
+      .flatMap(game => Option(game.gameId).filter(_.nonEmpty))
+      .getOrElse(s"${difficulty.toString}-${_activeCreatedAt}")
+    _activeSessionToken += 1
+    _lastSaveAtMs = 0L
+    _lastSaveSignature = ""
+    _saveInFlight = false
+    _pendingSave = None
+    _cloudSaveAvailable = true
+  }
+
+  private def _openGameView(difficulty: Difficulty): Unit = {
+    _currentGameView = Some(
+      new SudokuBoardView(
+        _sudokuGameController,
+        () => _backToMenu(),
+        difficulty,
+        state => _handleGameStateChanged(state)
+      )
+    )
+
+    _currentGameView.foreach { gameView =>
+      val (message, color) =
+        if _currentUsername.isDefined then ("Ready to sync (AWS)", _syncMuted)
+        else ("Guest mode", _syncMuted)
+      gameView.setSyncStatus(message, color)
+      gameView.startTimer()
+      contentArea.children = Seq(gameView.view)
+      VBox.setVgrow(gameView.view, Priority.Always)
+    }
+  }
+
+  private def _setSyncStatus(message: String, color: String): Unit =
+    _currentGameView.foreach(_.setSyncStatus(message, color))
+
+  private def _snapshotFor(state: ActiveGameState): SavedGame =
+    SavedGame(
+      createdAt = _activeCreatedAt,
+      difficulty = _activeDifficulty.toString(),
+      elapsedSeconds = state.elapsedSeconds.toLong,
+      board = state.board.values,
+      status = if state.isGameOver then GameStatus.Finished else GameStatus.InProgress,
+      gameId = _activeGameId,
+      initialBoard = _sudokuGameController.initialBoard,
+      notes = state.board.notes,
+      errorCount = state.errorCount,
+      hintsRemaining = state.hintsRemaining
+    )
+
+  private def _snapshotSignature(snapshot: SavedGame): String =
+    Seq(
+      snapshot.elapsedSeconds,
+      snapshot.status,
+      snapshot.errorCount,
+      snapshot.hintsRemaining,
+      snapshot.board,
+      snapshot.notes
+    ).mkString("|")
+
+  private def _handleGameStateChanged(
+      state: ActiveGameState,
+      force: Boolean = false
+  ): Unit = {
+    _currentUsername match {
+      case None =>
+        _setSyncStatus("Guest mode", _syncMuted)
+      case Some(username) if _cloudSaveAvailable =>
+        val snapshot = _snapshotFor(state)
+        val signature = _snapshotSignature(snapshot)
+        val now = System.currentTimeMillis()
+        val shouldSave =
+          force || state.isGameOver || now - _lastSaveAtMs >= _saveIntervalMs
+
+        if (
+          signature != _lastSaveSignature &&
+          shouldSave
+        ) {
+          _scheduleSave(_activeSessionToken, username, snapshot, signature, now)
+        }
+      case Some(_) =>
+        _setSyncStatus("AWS sync unavailable", _syncError)
+    }
+  }
+
+  private def _scheduleSave(
+      sessionToken: Long,
+      username: String,
+      snapshot: SavedGame,
+      signature: String,
+      requestedAtMs: Long
+  ): Unit = {
+    if (_saveInFlight) {
+      _pendingSave = Some((sessionToken, username, snapshot, signature))
+      _setSyncStatus("Saving latest changes...", _syncWarning)
+    } else {
+      _startSave(sessionToken, username, snapshot, signature, requestedAtMs)
+    }
+  }
+
+  private def _startSave(
+      sessionToken: Long,
+      username: String,
+      snapshot: SavedGame,
+      signature: String,
+      requestedAtMs: Long
+  ): Unit = {
+    _saveInFlight = true
+    _lastSaveAtMs = requestedAtMs
+    _setSyncStatus("Saving to AWS...", _syncWarning)
+
+    gameService.saveGame(username, snapshot).onComplete {
+      case Success(true) =>
+        Platform.runLater {
+          _upsertRecentGame(snapshot)
+          if (sessionToken == _activeSessionToken) {
+            _saveInFlight = false
+            _lastSaveSignature = signature
+            _flushPendingSave(sessionToken)
+          }
+        }
+      case Success(false) =>
+        Platform.runLater {
+          if (sessionToken == _activeSessionToken) {
+            _saveInFlight = false
+            _pendingSave = None
+            _cloudSaveAvailable = false
+            _setSyncStatus("AWS save route missing", _syncError)
+          }
+        }
+      case Failure(_) =>
+        Platform.runLater {
+          if (sessionToken == _activeSessionToken) {
+            _saveInFlight = false
+            _pendingSave = None
+            _cloudSaveAvailable = false
+            _setSyncStatus("AWS sync failed", _syncError)
+          }
+        }
+    }
+  }
+
+  private def _flushPendingSave(sessionToken: Long): Unit = {
+    _pendingSave match {
+      case Some((pendingSessionToken, username, snapshot, signature))
+          if pendingSessionToken == sessionToken &&
+            signature != _lastSaveSignature &&
+            _cloudSaveAvailable =>
+        _pendingSave = None
+        _startSave(sessionToken, username, snapshot, signature, System.currentTimeMillis())
+      case _ =>
+        _pendingSave = None
+        _setSyncStatus("Synced (AWS)", _syncSuccess)
+    }
+  }
+
+  private def _upsertRecentGame(game: SavedGame): Unit = {
+    val updated = game :: appState.recentGames.value.filterNot(existing =>
+      (game.gameId.nonEmpty && existing.gameId == game.gameId) ||
+        (game.gameId.isEmpty && existing.createdAt == game.createdAt)
+    )
+    appState.recentGames.set(updated.take(6))
+  }
+
+  private def _resumeLatestGame(): Unit =
+    appState.recentGames.value
+      .find(_.status == GameStatus.InProgress)
+      .orElse(appState.recentGames.value.headOption)
+      .foreach(_resumeSavedGame)
+
+  def resumeSavedGame(game: SavedGame): Unit =
+    _resumeSavedGame(game)
+
   private def loggedOutHeader = new VBox {
     spacing = 8
     padding = Insets(20, 40, 24, 40)
@@ -83,13 +350,18 @@ class DashboardView(authController: AuthController, appState: AppState) {
           new Button("Sign In / Register") {
             style =
               "-fx-background-color: #2563eb; -fx-text-fill: white; -fx-font-size: 18px; -fx-font-weight: bold; -fx-background-radius: 10; -fx-cursor: hand; -fx-padding: 16 36 16 36;"
-            onAction = (_: ActionEvent) => authController.showLoginView()
+            delegate.setOnAction(new EventHandler[ActionEvent] {
+              override def handle(event: ActionEvent): Unit =
+                authController.showLoginView()
+            })
           },
           new Button("Play as Guest") {
             style =
               "-fx-background-color: #374151; -fx-text-fill: white; -fx-font-size: 18px; -fx-font-weight: bold; -fx-background-radius: 10; -fx-cursor: hand; -fx-padding: 16 36 16 36;"
-            onAction =
-              (_: ActionEvent) => contentArea.children = Seq(_buildGuestContent)
+            delegate.setOnAction(new EventHandler[ActionEvent] {
+              override def handle(event: ActionEvent): Unit =
+                contentArea.children = Seq(_buildGuestContent)
+            })
           }
         )
       }
@@ -127,7 +399,8 @@ class DashboardView(authController: AuthController, appState: AppState) {
     )
   }
 
-  private def loggedInCloudSaveCard = new VBox {
+  private def loggedInCloudSaveCard(games: List[SavedGame]) = new VBox {
+    val hasSavedGames = games.nonEmpty
     padding = Insets(32)
     spacing = 16
     style =
@@ -139,9 +412,15 @@ class DashboardView(authController: AuthController, appState: AppState) {
         style = "-fx-text-fill: rgba(255,255,255,0.8); -fx-font-size: 13px;"
         wrapText = true
       },
-      new Button("▶   Continue Game") {
+      new Button(if (hasSavedGames) "▶   Continue Game" else "No saved games") {
+        disable = !hasSavedGames
+        opacity = if (hasSavedGames) 1.0 else 0.65
         style =
           "-fx-background-color: white; -fx-text-fill: #1e3a8a; -fx-font-size: 14px; -fx-font-weight: bold; -fx-background-radius: 8; -fx-cursor: hand; -fx-padding: 10 20 10 20;"
+        delegate.setOnAction(new EventHandler[ActionEvent] {
+          override def handle(event: ActionEvent): Unit =
+            _resumeLatestGame()
+        })
       }
     )
   }
@@ -171,7 +450,11 @@ class DashboardView(authController: AuthController, appState: AppState) {
       )
     }
 
-  private def loggedInStatsSection = new VBox {
+  private def loggedInStatsSection(games: List[SavedGame]) = new VBox {
+    val solvedCount = _completedGames(games).size.toString
+    val streak = _streakDays(games).toString
+    val averageTime = _averageFinishedTime(games)
+    val winRate = _winRate(games)
     spacing = 12
     padding = Insets(0, 32, 32, 32)
     children = Seq(
@@ -183,10 +466,10 @@ class DashboardView(authController: AuthController, appState: AppState) {
       new HBox {
         spacing = 12
         children = Seq(
-          loggedInStatTile("🏆", "PUZZLES SOLVED", "0"),
-          loggedInStatTile("🔥", "STREAK (DAYS)", "0"),
-          loggedInStatTile("⏱", "AVG TIME", "--:--"),
-          loggedInStatTile("📈", "WIN RATE", "--%")
+          loggedInStatTile("🏆", "PUZZLES SOLVED", solvedCount),
+          loggedInStatTile("🔥", "STREAK (DAYS)", streak),
+          loggedInStatTile("⏱", "AVG TIME", averageTime),
+          loggedInStatTile("📈", "WIN RATE", winRate)
         )
       }
     )
@@ -221,72 +504,33 @@ class DashboardView(authController: AuthController, appState: AppState) {
     row
   }
 
-  // TODO(anyone): Implement generator or store many examples and load them
   private def _startGame(difficulty: Difficulty): Unit = {
-    val boards = Map(
-      Difficulty.Easy -> Array(
-        Array(5, 3, 0, 0, 7, 0, 0, 0, 0),
-        Array(6, 0, 0, 1, 9, 5, 0, 0, 0),
-        Array(0, 9, 8, 0, 0, 0, 0, 6, 0),
-        Array(8, 0, 0, 0, 6, 0, 0, 0, 3),
-        Array(4, 0, 0, 8, 0, 3, 0, 0, 1),
-        Array(7, 0, 0, 0, 2, 0, 0, 0, 6),
-        Array(0, 6, 0, 0, 0, 0, 2, 8, 0),
-        Array(0, 0, 0, 4, 1, 9, 0, 0, 5),
-        Array(0, 0, 0, 0, 8, 0, 0, 7, 9)
-      ),
-      Difficulty.Medium -> Array(
-        Array(5, 3, 0, 0, 7, 0, 0, 0, 0),
-        Array(6, 0, 0, 1, 9, 5, 0, 0, 0),
-        Array(0, 9, 8, 0, 0, 0, 0, 6, 0),
-        Array(8, 0, 0, 0, 6, 0, 0, 0, 3),
-        Array(4, 0, 0, 8, 0, 3, 0, 0, 1),
-        Array(7, 0, 0, 0, 2, 0, 0, 0, 6),
-        Array(0, 6, 0, 0, 0, 0, 2, 8, 0),
-        Array(0, 0, 0, 4, 1, 9, 0, 0, 5),
-        Array(0, 0, 0, 0, 8, 0, 0, 7, 9)
-      ),
-      Difficulty.Hard -> Array(
-        Array(5, 3, 0, 0, 7, 0, 0, 0, 0),
-        Array(6, 0, 0, 1, 9, 5, 0, 0, 0),
-        Array(0, 9, 8, 0, 0, 0, 0, 6, 0),
-        Array(8, 0, 0, 0, 6, 0, 0, 0, 3),
-        Array(4, 0, 0, 8, 0, 3, 0, 0, 1),
-        Array(7, 0, 0, 0, 2, 0, 0, 0, 6),
-        Array(0, 6, 0, 0, 0, 0, 2, 8, 0),
-        Array(0, 0, 0, 4, 1, 9, 0, 0, 5),
-        Array(0, 0, 0, 0, 8, 0, 0, 7, 9)
-      ),
-      Difficulty.Expert -> Array(
-        Array(5, 3, 0, 0, 7, 0, 0, 0, 0),
-        Array(6, 0, 0, 1, 9, 5, 0, 0, 0),
-        Array(0, 9, 8, 0, 0, 0, 0, 6, 0),
-        Array(8, 0, 0, 0, 6, 0, 0, 0, 3),
-        Array(4, 0, 0, 8, 0, 3, 0, 0, 1),
-        Array(7, 0, 0, 0, 2, 0, 0, 0, 6),
-        Array(0, 6, 0, 0, 0, 0, 2, 8, 0),
-        Array(0, 0, 0, 4, 1, 9, 0, 0, 5),
-        Array(0, 0, 0, 0, 8, 0, 0, 7, 9)
-      )
-    )
-
-    val initialBoard = boards.getOrElse(difficulty, boards(Difficulty.Easy))
+    val initialBoard = SudokuPuzzles.boardFor(difficulty)
+    _sudokuGameController = new SudokuGameController()
+    _prepareActiveGame(difficulty)
     _sudokuGameController.startNewGame(initialBoard)
+    _openGameView(difficulty)
+    _handleGameStateChanged(_sudokuGameController.gameState, force = true)
+  }
 
-    _currentGameView = Some(
-      new SudokuBoardView(
-        _sudokuGameController,
-        () => _backToMenu(),
-        difficulty
-      )
+  private def _resumeSavedGame(game: SavedGame): Unit = {
+    val difficulty = _difficultyFromString(game.difficulty)
+    _sudokuGameController = new SudokuGameController()
+    _prepareActiveGame(difficulty, Some(game))
+    _sudokuGameController.startSavedGame(
+      initialBoard = game.resumeInitialBoard,
+      boardValues = game.board,
+      notes = game.normalizedNotes,
+      elapsedSeconds = game.elapsedSeconds.toInt,
+      errorCount = game.errorCount,
+      hintsRemaining = game.hintsRemaining
     )
-    _currentGameView.get.startTimer()
-
-    contentArea.children = Seq(_currentGameView.get.view)
-    VBox.setVgrow(_currentGameView.get.view, Priority.Always)
+    _openGameView(difficulty)
   }
 
   private def _backToMenu(): Unit = {
+    if (_sudokuGameController.gameState != null)
+      _handleGameStateChanged(_sudokuGameController.gameState, force = true)
     _currentGameView.foreach(_.stop())
     _currentGameView = None
     appState.currentUser.value match {
@@ -303,8 +547,10 @@ class DashboardView(authController: AuthController, appState: AppState) {
       new Button("← Back") {
         style =
           "-fx-background-color: transparent; -fx-text-fill: #9ca3af; -fx-font-size: 14px; -fx-font-weight: bold; -fx-cursor: hand;"
-        onAction =
-          (_: ActionEvent) => contentArea.children = Seq(loggedOutContent)
+        delegate.setOnAction(new EventHandler[ActionEvent] {
+          override def handle(event: ActionEvent): Unit =
+            contentArea.children = Seq(loggedOutContent)
+        })
       }
     )
   }
@@ -328,6 +574,7 @@ class DashboardView(authController: AuthController, appState: AppState) {
   }
 
   private def loggedInContent(username: String): VBox = {
+    val games = appState.recentGames.value
     new VBox {
       style = "-fx-background-color: #0B1120;"
       minWidth = 700
@@ -340,12 +587,12 @@ class DashboardView(authController: AuthController, appState: AppState) {
           children = Seq(
             new VBox {
               HBox.setHgrow(this, Priority.Always)
-              children = Seq(loggedInCloudSaveCard)
+              children = Seq(loggedInCloudSaveCard(games))
             },
             _buildNewGameCard
           )
         },
-        loggedInStatsSection
+        loggedInStatsSection(games)
       )
     }
   }

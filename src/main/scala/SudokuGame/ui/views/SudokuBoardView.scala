@@ -19,7 +19,8 @@ import scala.collection.immutable as immutable
 class SudokuBoardView(
     gameController: SudokuGameController,
     onBack: () => Unit,
-    difficulty: Difficulty
+    difficulty: Difficulty,
+    onGameStateChanged: GameState => Unit = _ => ()
 ) {
 
   private val _fontFamily =
@@ -57,6 +58,11 @@ class SudokuBoardView(
   }
 
   private def _setHistoryButtonState(button: Button, enabled: Boolean): Unit = {
+    button.disable = !enabled
+    button.opacity = if (enabled) 1.0 else 0.55
+  }
+
+  private def _setHintButtonState(button: Button, enabled: Boolean): Unit = {
     button.disable = !enabled
     button.opacity = if (enabled) 1.0 else 0.55
   }
@@ -552,17 +558,20 @@ class SudokuBoardView(
   undoBtn.onAction = _ => gameController.undo()
   redoBtn.onAction = _ => gameController.redo()
   deleteBtn.onAction = _ => gameController.clearCell()
+  helpBtn.onAction = _ => gameController.revealHint()
+
+  private val hintBadgeLabel = new Label("3") {
+    style =
+      s"-fx-background-color: #2E6CFF; -fx-text-fill: white; -fx-font-size: 10px; -fx-font-weight: 800; -fx-font-family: $_fontFamily; -fx-background-radius: 999; -fx-padding: 1 5 1 5;"
+    StackPane.setAlignment(this, Pos.TopRight)
+    translateX = -6
+    translateY = -6
+  }
 
   private val helpBadge = new StackPane {
     children = Seq(
       helpBtn,
-      new Label("3") {
-        style =
-          s"-fx-background-color: #2E6CFF; -fx-text-fill: white; -fx-font-size: 10px; -fx-font-weight: 800; -fx-font-family: $_fontFamily; -fx-background-radius: 999; -fx-padding: 1 5 1 5;"
-        StackPane.setAlignment(this, Pos.TopRight)
-        translateX = -6
-        translateY = -6
-      }
+      hintBadgeLabel
     )
   }
 
@@ -660,6 +669,8 @@ class SudokuBoardView(
     _errorLabel.text = s"Errors: ${gameState.errorCount}/${gameState.maxErrors}"
     _setHistoryButtonState(undoBtn, gameState.canUndo)
     _setHistoryButtonState(redoBtn, gameState.canRedo)
+    _setHintButtonState(helpBtn, gameState.hintsRemaining > 0 && !gameState.isGameOver)
+    hintBadgeLabel.text = gameState.hintsRemaining.toString
     _setTimerRunning(!gameState.isPaused && !gameState.isGameOver)
 
     val gameIsOver = gameState.isGameOver
@@ -702,7 +713,10 @@ class SudokuBoardView(
 
   private val _gameStateSubscription: Unit =
     gameController.gameStateProperty.onChange { (_, _, newState) =>
-      if (newState != null) updateBoardDisplay(newState)
+      if (newState != null) {
+        updateBoardDisplay(newState)
+        onGameStateChanged(newState)
+      }
     }
 
   if (gameController.gameState != null)
@@ -713,4 +727,10 @@ class SudokuBoardView(
   }
 
   def stop(): Unit = _setTimerRunning(false)
+
+  def setSyncStatus(message: String, color: String = _success): Unit = {
+    _syncLabel.text = message
+    _syncLabel.style =
+      s"-fx-text-fill: $color; -fx-font-size: 13px; -fx-font-weight: 800; -fx-font-family: $_fontFamily;"
+  }
 }

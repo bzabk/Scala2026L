@@ -9,4 +9,7 @@ class GameService(gameRepository: GameRepository)(implicit ec: ExecutionContext)
 
   def loadRecentGames(username: String): Future[List[GameState]] =
     gameRepository.fetchRecentGames(username)
+
+  def saveGame(username: String, game: GameState): Future[Boolean] =
+    gameRepository.saveGame(username, game)
 }

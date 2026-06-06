@@ -24,8 +24,8 @@ object Main extends JFXApp3 {
     val authController = new AuthController(appLayout, authService, appState,
       onLoginSuccess = gameController.loadRecentGames
     )
-    val sidebar = new SidebarView(authController,appState,appLayout)
-    val dashboard = new DashboardView(authController,appState)
+    val dashboard = new DashboardView(authController,appState,gameService)
+    val sidebar = new SidebarView(authController,appState,appLayout,dashboard.resumeSavedGame)
     appLayout.setSidebar(sidebar.view)
     appLayout.setMainContent(dashboard.view)
 

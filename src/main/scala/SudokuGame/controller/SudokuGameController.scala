@@ -1,6 +1,6 @@
 package SudokuGame.controller
 
-import SudokuGame.model.{BoardMove, GameState, SudokuBoard}
+import SudokuGame.model.{BoardMove, GameState, SudokuBoard, SudokuSolver}
 import scalafx.beans.property.ObjectProperty
 import scala.collection.immutable
 
@@ -12,15 +12,43 @@ class SudokuGameController {
   private def _cloneBoard(board: Array[Array[Int]]): Array[Array[Int]] =
     board.map(_.clone())
 
+  private def _toArrayBoard(board: Seq[Seq[Int]]): Array[Array[Int]] =
+    Array.tabulate(9, 9) { (row, col) =>
+      board.lift(row).flatMap(_.lift(col)).getOrElse(0)
+    }
+
   def gameState: GameState = _gameStateProperty.value
   def gameState_=(state: GameState): Unit = _gameStateProperty.value = state
 
   def gameStateProperty: ObjectProperty[GameState] = _gameStateProperty
 
+  def initialBoard: Seq[Seq[Int]] =
+    if _initialBoard.isEmpty then Seq.fill(9, 9)(0)
+    else _initialBoard.map(_.toSeq).toSeq
+
   def startNewGame(initialBoard: Array[Array[Int]]): Unit = {
     _initialBoard = _cloneBoard(initialBoard)
     val board = new SudokuBoard(_cloneBoard(initialBoard))
     gameState = GameState(board = board)
+  }
+
+  def startSavedGame(
+      initialBoard: Seq[Seq[Int]],
+      boardValues: Seq[Seq[Int]],
+      notes: Seq[Seq[Seq[Int]]],
+      elapsedSeconds: Int,
+      errorCount: Int,
+      hintsRemaining: Int
+  ): Unit = {
+    _initialBoard = _toArrayBoard(initialBoard)
+    val board = new SudokuBoard(_cloneBoard(_initialBoard))
+    board.loadSnapshot(boardValues, notes)
+    gameState = GameState(
+      board = board,
+      elapsedSeconds = elapsedSeconds,
+      errorCount = errorCount,
+      hintsRemaining = hintsRemaining
+    )
   }
 
   def restartGame(): Unit = {
@@ -112,6 +140,66 @@ class SudokuGameController {
     )
 
     gameStateProperty.value = gameState
+  }
+
+  def revealHint(): Boolean = {
+    if (gameState == null || gameState.isGameOver || gameState.isPaused) return false
+    if (gameState.hintsRemaining <= 0) return false
+
+    val solutionOpt = SudokuSolver.solve(initialBoard)
+    solutionOpt match {
+      case None => false
+      case Some(solution) =>
+        val targetOpt = hintTarget(solution)
+        targetOpt match {
+          case None => false
+          case Some((row, col, value)) =>
+            val previousValue = gameState.board.getCellValue(row, col)
+            val previousNotes = gameState.board.getCellNotes(row, col)
+
+            gameState.board.updateCell(row, col, value, false)
+            gameState = gameState
+              .recordMove(
+                BoardMove(
+                  row,
+                  col,
+                  previousValue,
+                  previousNotes,
+                  value,
+                  immutable.SortedSet.empty
+                )
+              )
+              .selectCell(row, col)
+              .copy(hintsRemaining = gameState.hintsRemaining - 1)
+
+            if (gameState.isSolved || gameState.isLost) {
+              gameState = gameState.copy(isGameOver = true)
+            }
+
+            gameStateProperty.value = gameState
+            true
+        }
+    }
+  }
+
+  private def hintTarget(solution: Seq[Seq[Int]]): Option[(Int, Int, Int)] = {
+    val selectedTarget = for {
+      row <- gameState.selectedRow
+      col <- gameState.selectedCol
+      if !gameState.board.isCellGiven(row, col)
+      solutionValue <- solution.lift(row).flatMap(_.lift(col))
+      if gameState.board.getCellValue(row, col) != solutionValue
+    } yield (row, col, solutionValue)
+
+    selectedTarget.orElse {
+      (for {
+        row <- 0 until 9
+        col <- 0 until 9
+        if !gameState.board.isCellGiven(row, col)
+        solutionValue <- solution.lift(row).flatMap(_.lift(col))
+        if gameState.board.getCellValue(row, col) != solutionValue
+      } yield (row, col, solutionValue)).headOption
+    }
   }
 
   def undo(): Unit = {

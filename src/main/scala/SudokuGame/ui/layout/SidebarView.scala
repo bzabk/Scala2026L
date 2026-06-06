@@ -6,7 +6,12 @@ import scalafx.geometry.{Insets, Pos}
 import scalafx.scene.control.{Button, Label}
 import scalafx.scene.layout.{HBox, Priority, Region, VBox}
 
-class SidebarView(authController: AuthController,appState: AppState,mainApplicationLayout: MainApplicationLayout) {
+class SidebarView(
+    authController: AuthController,
+    appState: AppState,
+    mainApplicationLayout: MainApplicationLayout,
+    onRecentGameSelected: GameState => Unit = _ => ()
+) {
 
   private val sidebarBgColor = "#1d2a3d"
   private val borderColor = "#324461"
@@ -37,7 +42,14 @@ class SidebarView(authController: AuthController,appState: AppState,mainApplicat
     vgrow = Priority.Always
   }
 
-  private def recentGameRow(difficulty: String, color: String, date: String, time: String, status: String) = {
+  private def recentGameRow(
+      difficulty: String,
+      color: String,
+      date: String,
+      time: String,
+      status: String,
+      onClick: () => Unit
+  ) = {
     val row = new HBox {
       spacing = 10
       padding = Insets(9, 8, 9, 8)
@@ -72,6 +84,7 @@ class SidebarView(authController: AuthController,appState: AppState,mainApplicat
     }
     row.delegate.setOnMouseEntered(_ => row.style = "-fx-background-color: rgba(255,255,255,0.05); -fx-background-radius: 8; -fx-cursor: hand;")
     row.delegate.setOnMouseExited(_  => row.style = "-fx-background-color: transparent; -fx-background-radius: 8; -fx-cursor: hand;")
+    row.delegate.setOnMouseClicked(_ => onClick())
     row
   }
 
@@ -110,7 +123,14 @@ class SidebarView(authController: AuthController,appState: AppState,mainApplicat
     val date   = game.createdAt.take(10)
     val time   = game.createdAt.drop(11).take(5)
     val status = if game.status == GameStatus.Finished then "Completed" else "In progress"
-    recentGameRow(game.difficulty, difficultyColor(game.difficulty), date, time, status)
+    recentGameRow(
+      game.difficulty,
+      difficultyColor(game.difficulty),
+      date,
+      time,
+      status,
+      () => onRecentGameSelected(game)
+    )
   }
 
   private def updateRecentGamesDisplay(games: List[GameState]): Unit =

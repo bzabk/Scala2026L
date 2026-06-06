@@ -22,19 +22,25 @@ def build_response(status_code, message, data=None):
     }
 
 def lambda_handler(event, context):
+    try:
+        if 'body' not in event:
+            return build_response(400, "Missing request body")
 
-    body = json.loads(event['body'])
+        body = json.loads(event['body'])
+        username = body.get('username')
+        password = body.get('password')
 
-    username = body.get('username')
-    body = json.loads(event['body'])
-    username = body.get('username')
-    password = body.get('password')
-    user_response = table.get_item(Key={'username': username})
-    if 'Item' not in user_response:
-        return build_response(404, "User does not exist")
+        if not username or not password:
+            return build_response(400, "Missing username or password")
 
-    stored_hash = user_response['Item'].get('passwordHash')
-    if hash_password(password) == stored_hash:
-        return build_response(200, "Logged in", {"username": username})
-    else:
-        return build_response(401, "Invalid Password")
+        user_response = table.get_item(Key={'username': username})
+        if 'Item' not in user_response:
+            return build_response(404, "User does not exist")
+
+        stored_hash = user_response['Item'].get('passwordHash')
+        if hash_password(password) == stored_hash:
+            return build_response(200, "Logged in", {"username": username})
+        else:
+            return build_response(401, "Invalid Password")
+    except Exception:
+        return build_response(500, "Internal server error")
