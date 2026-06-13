@@ -16,6 +16,8 @@ import scalafx.util.Duration
 import scala.collection.mutable as mutable
 import scala.collection.immutable as immutable
 
+import java.awt.Toolkit
+import javax.sound.sampled._
 class SudokuBoardView(
     gameController: SudokuGameController,
     onBack: () => Unit,
@@ -106,6 +108,48 @@ class SudokuBoardView(
   private def _focusBoard(): Unit =
     view.requestFocus()
 
+  def playTone(freq: Int): Unit = {
+    val sampleRate = 44100
+    val durationMs = 150
+    val samples = (sampleRate * durationMs / 1000)
+
+    val buffer = new Array[Byte](samples * 2)
+
+    for (i <- 0 until samples) {
+      val angle = 2.0 * Math.PI * i * freq / sampleRate
+      val value = (Math.sin(angle) * 32767).toShort
+
+      buffer(2 * i) = (value & 0xFF).toByte
+      buffer(2 * i + 1) = ((value >> 8) & 0xFF).toByte
+    }
+
+    val format = new AudioFormat(
+      sampleRate,
+      16,
+      1,
+      true,
+      false
+    )
+
+    val line = AudioSystem.getSourceDataLine(format)
+    line.open(format)
+    line.start()
+    line.write(buffer, 0, buffer.length)
+    line.drain()
+    line.close()
+  }
+
+  private def _playSound(soundType: String): Unit = {
+    soundType match {
+      case "error" =>
+        playTone(300)
+
+      case "gameOver" =>
+        playTone(900)
+        Thread.sleep(120)
+        playTone(600)
+    }
+  }
   private def _togglePause(): Unit = {
     gameController.togglePause()
     _focusBoard()
@@ -664,8 +708,15 @@ class SudokuBoardView(
     }
   }
 
+  private var _previousErrorCount = 0
   private def updateBoardDisplay(gameState: GameState): Unit = {
     _timerLabel.text = gameState.formatTime()
+
+    if (gameState.errorCount > _previousErrorCount) {
+      _playSound("error")
+    }
+
+    _previousErrorCount = gameState.errorCount
     _errorLabel.text = s"Errors: ${gameState.errorCount}/${gameState.maxErrors}"
     _setHistoryButtonState(undoBtn, gameState.canUndo)
     _setHistoryButtonState(redoBtn, gameState.canRedo)
@@ -694,6 +745,7 @@ class SudokuBoardView(
       _gameOverMessage.text = s"Finished in ${gameState.formatTime()}"
       _gameOverIcon.children = Seq(_gameOverGraphic(isSuccess = true))
     } else if (gameWasLost) {
+      _playSound("gameOver")
       _gameOverPanel.style =
         s"-fx-background-color: #2A1111; -fx-border-color: #EF4444; -fx-border-width: 2; -fx-background-radius: 8; -fx-border-radius: 8;"
       _gameOverTitle.text = "Game over"
