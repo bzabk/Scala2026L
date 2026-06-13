@@ -18,6 +18,8 @@ import scala.collection.immutable as immutable
 
 import java.awt.Toolkit
 import javax.sound.sampled._
+import java.io.File
+import java.io.BufferedInputStream
 class SudokuBoardView(
     gameController: SudokuGameController,
     onBack: () => Unit,
@@ -108,6 +110,27 @@ class SudokuBoardView(
   private def _focusBoard(): Unit =
     view.requestFocus()
 
+  private def playWav(path: String): Unit = {
+    try {
+      val stream = getClass.getResourceAsStream(path)
+
+      if (stream == null) {
+        println(s"Sound not found: $path")
+        return
+      }
+
+      val buffered = new BufferedInputStream(stream)
+      val audioInputStream = AudioSystem.getAudioInputStream(buffered)
+
+      val clip = AudioSystem.getClip()
+      clip.open(audioInputStream)
+      clip.start()
+
+    } catch {
+      case e: Exception =>
+        println(s"Sound error: ${e.getMessage}")
+    }
+  }
   def playTone(freq: Int): Unit = {
     val sampleRate = 44100
     val durationMs = 150
@@ -141,6 +164,8 @@ class SudokuBoardView(
 
   private def _playSound(soundType: String): Unit = {
     soundType match {
+      case "click" =>
+        playWav("sounds/click.wav")
       case "error" =>
         playTone(300)
 
@@ -510,7 +535,9 @@ class SudokuBoardView(
   private val _backButton = new Button("←  Back") {
     style =
       s"-fx-background-color: transparent; -fx-text-fill: $_textMuted; -fx-font-size: 15px; -fx-font-weight: 700; -fx-font-family: $_fontFamily; -fx-cursor: hand;"
-    onAction = _ => onBack()
+    onAction = _ => {
+      onBack()
+    }
   }
 
   private val _difficultyLabel = new Label(
@@ -599,10 +626,23 @@ class SudokuBoardView(
 
   _setHistoryButtonState(undoBtn, enabled = false)
   _setHistoryButtonState(redoBtn, enabled = false)
-  undoBtn.onAction = _ => gameController.undo()
-  redoBtn.onAction = _ => gameController.redo()
-  deleteBtn.onAction = _ => gameController.clearCell()
-  helpBtn.onAction = _ => gameController.revealHint()
+  undoBtn.onAction = _ => {
+    playWav("/sounds/506054__mellau__button-click-1.wav")
+    gameController.undo()
+  }
+  redoBtn.onAction = _ => {
+    playWav("/sounds/506054__mellau__button-click-1.wav")
+    gameController.redo()
+  }
+  deleteBtn.onAction = _ => {
+    playWav("/sounds/506054__mellau__button-click-1.wav")
+    gameController.clearCell()
+  }
+  
+  helpBtn.onAction = _ => {
+    playWav("/sounds/506054__mellau__button-click-1.wav")
+    gameController.revealHint()
+  }
 
   private val hintBadgeLabel = new Label("3") {
     style =
@@ -632,7 +672,10 @@ class SudokuBoardView(
     graphic = _notesButtonGraphic()
     contentDisplay = ContentDisplay.Left
     graphicTextGap = 10
-    onAction = _ => gameController.toggleNotesMode()
+    onAction = _ => {
+      playWav("/sounds/506054__mellau__button-click-1.wav")
+      gameController.toggleNotesMode()
+    }
   }
 
   private def numberButton(number: Int): Button = new Button(number.toString) {
